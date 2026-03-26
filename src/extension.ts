@@ -103,9 +103,16 @@ export function activate(context: vscode.ExtensionContext) {
         const port = getTag(block, 'Port') || (protocol === '0' ? '21' : '22');
         const user = getTag(block, 'User');
         let pass = getTag(block, 'Pass');
-        const passEncoding = (block.match(/<Pass[^>]*encoding=\"([^\"]+)\"/) || [])[1];
-        if (pass && passEncoding === 'base64') {
-          try { pass = Buffer.from(pass, 'base64').toString('utf8'); } catch {}
+        // Витягуємо пароль: якщо encoding="base64" — декодуємо, інакше беремо як є
+        const passTagMatch = block.match(/<Pass([^>]*)>([\s\S]*?)<\/Pass>/i);
+        if (passTagMatch) {
+          const attrs = passTagMatch[1] || '';
+          const value = passTagMatch[2] || '';
+          if (/encoding\s*=\s*"base64"/i.test(attrs)) {
+            try { pass = Buffer.from(value, 'base64').toString('utf8'); } catch { pass = value; }
+          } else {
+            pass = value;
+          }
         }
         const name = getTag(block, 'Name') || host;
         let type: 'ftp' | 'ssh' = 'ftp';
