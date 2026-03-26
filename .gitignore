@@ -1,0 +1,27 @@
+# Node.js
+node_modules/
+
+# VS Code
+.vscode/
+
+# Build output
+out/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env files
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test output
+coverage/
+
+# Misc
+package-lock.json

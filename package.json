@@ -1,0 +1,130 @@
+{
+  "name": "remotix-extension",
+  "displayName": "Remotix Extension",
+  "description": "FTP and SSH client extension for Visual Studio Code",
+  "version": "0.0.1",
+  "publisher": "locky42",
+  "engines": {
+    "vscode": ">=1.70.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:remotix.moreActions",
+    "onCommand:remotix.importSshConfig",
+    "onCommand:remotix.addConnection",
+    "onCommand:remotix.editConnection",
+    "onCommand:remotix.openSshTerminal",
+    "onCommand:remotix.downloadFile",
+    "onCommand:remotix.uploadFile",
+      "onCommand:remotix.editFile",
+      "onCommand:remotix.importFileZilla"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "remotix.addConnection",
+        "title": "Remotix: Add connection"
+      },
+      {
+        "command": "remotix.editConnection",
+        "title": "Remotix: Edit connection"
+      },
+      {
+        "command": "remotix.openSshTerminal",
+        "title": "Remotix: Open SSH Terminal"
+      },
+      {
+        "command": "remotix.downloadFile",
+        "title": "Remotix: Download File (from server)"
+      },
+      {
+        "command": "remotix.uploadFile",
+        "title": "Remotix: Upload File (to server)"
+      },
+      {
+        "command": "remotix.editFile",
+        "title": "Remotix: Edit File (open)"
+      },
+      {
+        "command": "remotix.importSshConfig",
+        "title": "Remotix: Import from SSH config"
+      },
+      {
+        "command": "remotix.moreActions",
+        "title": "..."
+      },
+      {
+        "command": "remotix.importFileZilla",
+        "title": "Remotix: Import from FileZilla"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "remotix.moreActions",
+          "when": "view == remotixView",
+          "group": "navigation@1",
+          "icon": "$(ellipsis)"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "remotix.editConnection",
+          "when": "view == remotixView",
+          "group": "navigation"
+        },
+        {
+          "command": "remotix.openSshTerminal",
+          "when": "view == remotixView && viewItem == ssh",
+          "group": "navigation"
+        },
+        {
+          "command": "remotix.downloadFile",
+          "when": "view == remotixView && viewItem == ssh-file"
+        },
+        {
+          "command": "remotix.uploadFile",
+          "when": "view == remotixView && viewItem == ssh-folder"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "remotix-activitybar",
+          "title": "Remotix",
+          "icon": "media/remotix-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "remotix-activitybar": [
+        {
+          "id": "remotixView",
+          "name": "Remotix Panel"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile && npm run copy-ui",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "copy-ui": "mkdir -p ./out/ui && cp ./src/ui/*.html ./out/ui/"
+  },
+  "dependencies": {
+    "ssh2": "^1.17.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.70.0",
+    "@types/node": "^16.0.0",
+    "typescript": "^4.7.0",
+    "eslint": "^8.0.0"
+  }
+}

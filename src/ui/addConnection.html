@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{TITLE}}</title>
+  <style>
+    body { font-family: sans-serif; padding: 16px; color: var(--vscode-foreground); background: var(--vscode-editor-background); }
+    label { display: block; margin-top: 10px; }
+    input, select {
+      width: 100%;
+      padding: 4px;
+      margin-top: 2px;
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border);
+      border-radius: 2px;
+      box-sizing: border-box;
+    }
+    input[type="checkbox"] { width: auto; margin-right: 6px; }
+    input:focus, select:focus {
+      outline: 1px solid var(--vscode-focusBorder);
+    }
+    .row { margin-bottom: 10px; }
+    button {
+      margin-top: 16px;
+      color: var(--vscode-button-foreground);
+      background: var(--vscode-button-background);
+      border: none;
+      border-radius: 2px;
+      padding: 6px 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: var(--vscode-button-hoverBackground);
+    }
+    .file-row {
+      display: flex;
+      gap: 4px;
+      align-items: flex-end;
+    }
+    .file-row label { margin: 0; flex: 1; }
+    .file-row input {
+      margin-top: 2px;
+      height: 32px;
+    }
+    .file-row button {
+      margin-top: 0;
+      padding: 0 12px;
+      height: 32px;
+      min-width: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .checkbox-row { display: flex; align-items: center; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h2>{{TITLE}}</h2>
+  <form id="connForm">
+    <div class="checkbox-row">
+      <input type="checkbox" id="global" name="global" checked>
+      <label for="global" style="margin:0;">{{GLOBAL}}</label>
+    </div>
+    <div class="row">
+      <label>{{TYPE_LABEL}}
+        <select id="type" name="type">
+          <option value="ssh" {{SSH_SELECTED}}>{{SSH}}</option>
+          <option value="ftp" {{FTP_SELECTED}}>{{FTP}}</option>
+        </select>
+      </label>
+    </div>
+    <div class="row"><label>{{NAME}}<input id="label" name="label" required value="{{LABEL}}"></label></div>
+    <div class="row"><label>{{HOST}}<input id="host" name="host" required value="{{HOST}}"></label></div>
+    <div class="row"><label>{{PORT}}<input id="port" name="port" value="{{PORT}}" required></label></div>
+    <div class="row"><label>{{USER}}<input id="user" name="user" required value="{{USER}}"></label></div>
+    <div class="row" id="authMethodRow">
+      <label>{{AUTH_METHOD_LABEL}}
+        <select id="authMethod" name="authMethod">
+          <option value="password" {{PASSWORD_SELECTED}}>{{PASSWORD}}</option>
+          <option value="privateKey" {{KEY_SELECTED}}>{{SSH_KEY}}</option>
+        </select>
+      </label>
+    </div>
+    <div class="row" id="passwordRow"><label>{{PASSWORD}}<input id="password" name="password" type="password" value="{{PASSWORD}}"></label></div>
+    <div class="row file-row" id="authFileRow">
+      <label style="flex:1">{{AUTH_FILE_LABEL}}
+        <input id="authFile" name="authFile" placeholder="{{AUTH_FILE_PLACEHOLDER}}" value="{{AUTHFILE}}">
+      </label>
+      <button type="button" id="pickFileBtn" title="{{PICK_FILE}}" tabindex="-1">...</button>
+    </div>
+    <button type="submit">{{SUBMIT}}</button>
+    <button type="button" id="cancelBtn">{{CANCEL}}</button>
+  </form>
+  <script>
+    const form = document.getElementById('connForm');
+    const vscode = acquireVsCodeApi();
+    const typeSelect = document.getElementById('type');
+    const authMethodRow = document.getElementById('authMethodRow');
+    const authFileRow = document.getElementById('authFileRow');
+    const passwordRow = document.getElementById('passwordRow');
+    const authMethodSelect = document.getElementById('authMethod');
+    const pickFileBtn = document.getElementById('pickFileBtn');
+    const authFileInput = document.getElementById('authFile');
+    function updateFields() {
+      if (typeSelect.value === 'ftp') {
+        authMethodRow.style.display = 'none';
+        authFileRow.style.display = 'none';
+        passwordRow.style.display = '';
+      } else {
+        authMethodRow.style.display = '';
+        if (authMethodSelect.value === 'password') {
+          authFileRow.style.display = 'none';
+          passwordRow.style.display = '';
+        } else {
+          authFileRow.style.display = '';
+          passwordRow.style.display = 'none';
+        }
+      }
+    }
+    typeSelect.addEventListener('change', updateFields);
+    authMethodSelect.addEventListener('change', updateFields);
+    updateFields();
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(form).entries());
+      vscode.postMessage({ command: 'add', data });
+    });
+    document.getElementById('cancelBtn').onclick = () => {
+      vscode.postMessage({ command: 'cancel' });
+    };
+    pickFileBtn.onclick = () => {
+      vscode.postMessage({ command: 'pickFile' });
+    };
+    window.addEventListener('message', event => {
+      if (event.data.command === 'setFile') {
+        authFileInput.value = event.data.path;
+      }
+    });
+  </script>
+</body>
+</html>
