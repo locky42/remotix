@@ -5,15 +5,117 @@ import { t } from './lang';
 import { Client, ConnectConfig } from 'ssh2';
 import { getGlobalConfig } from './config';
 
-export class RemotixTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+export class RemotixTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.TreeDragAndDropController<vscode.TreeItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData: vscode.Event<void> = this._onDidChangeTreeData.event;
   private connections: ConnectionItem[];
 
   private context: vscode.ExtensionContext;
+  readonly dragMimeTypes: string[] = ['application/vnd.code.tree.remotixView'];
+  readonly dropMimeTypes: string[] = ['application/vnd.code.tree.remotixView'];
+
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
     this.connections = getGlobalConfig(context).connections;
+  }
+  
+  handleDrag?(source: vscode.TreeItem[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void | Thenable<void> {
+
+    const items = source.filter(item => ['connection', 'ssh-file', 'ssh-folder'].includes((item as any).contextValue));
+    if (items.length > 0) {
+      const payload = items.map(i => ({
+        contextValue: (i as any).contextValue,
+        connectionLabel: (i as any).connectionLabel,
+        sshPath: (i as any).sshPath,
+        label: i.label
+      }));
+      dataTransfer.set('application/vnd.code.tree.remotixView', new vscode.DataTransferItem(JSON.stringify(payload)));
+    }
+  }
+
+  async handleDrop?(target: vscode.TreeItem | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void> {
+    const transfer = dataTransfer.get('application/vnd.code.tree.remotixView');
+    if (!transfer) return;
+    let draggedItems: any[] = [];
+    try {
+      draggedItems = JSON.parse(transfer.value);
+    } catch {
+      draggedItems = Array.isArray(transfer.value) ? transfer.value : [transfer.value];
+    }
+
+    if (draggedItems.length && draggedItems[0].contextValue === 'connection') {
+      if (!target || (target as any).contextValue !== 'connection') return;
+      const targetLabel = (target as any).connectionLabel || target.label;
+      const draggedLabels = draggedItems.map(i => i.label);
+      const dragged = this.connections.filter(c => draggedLabels.includes(c.label));
+      this.connections = this.connections.filter(c => !draggedLabels.includes(c.label));
+      const idx = this.connections.findIndex(c => c.label === targetLabel);
+      if (idx !== -1) {
+        this.connections.splice(idx, 0, ...dragged);
+        this._onDidChangeTreeData.fire();
+      }
+      return;
+    }
+
+    if (!target || !['ssh-folder', 'ssh-file'].includes((target as any).contextValue)) return;
+    const targetFolder = (target as any).contextValue === 'ssh-folder'
+      ? (target as any).sshPath
+      : ((target as any).sshPath || '').split('/').slice(0, -1).join('/') || '.';
+    const connectionLabel = (target as any).connectionLabel;
+    const conn = this.getConnectionByLabel(connectionLabel);
+    if (!conn) return;
+
+    const Client = require('ssh2').Client;
+    const ssh = new Client();
+    const config: any = {
+      host: conn.host || (conn.detail ? conn.detail.split('@')[1]?.split(':')[0] : ''),
+      port: conn.port ? parseInt(conn.port) : 22,
+      username: conn.user || (conn.detail ? conn.detail.split('@')[0] : ''),
+    };
+    if (conn.authMethod === 'privateKey' && conn.authFile) {
+      try {
+        config.privateKey = require('fs').readFileSync(conn.authFile);
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        vscode.window.showErrorMessage(t('cannotReadKey', { error: errMsg }));
+        return;
+      }
+    } else if (conn.password) {
+      config.password = conn.password;
+    }
+
+    ssh.on('ready', () => {
+      ssh.sftp((err: Error | undefined, sftp: any) => {
+        if (err) {
+          vscode.window.showErrorMessage(t('sftpError', { error: err.message }));
+          ssh.end();
+          return;
+        }
+        let moved = 0;
+        let failed = 0;
+        const total = draggedItems.length;
+        draggedItems.forEach((item, idx) => {
+          if (!item.sshPath) { failed++; if (moved + failed === total) ssh.end(); return; }
+          const filename = item.sshPath.split('/').pop();
+          const newPath = targetFolder === '.' ? filename : `${targetFolder}/${filename}`;
+          if (item.sshPath === newPath) { moved++; if (moved + failed === total) ssh.end(); return; }
+          sftp.rename(item.sshPath, newPath, (err: Error | null) => {
+            if (err) {
+              failed++;
+              vscode.window.showErrorMessage(t('fileMoveError', { error: err.message }));
+            } else {
+              moved++;
+            }
+            if (moved + failed === total) {
+              ssh.end();
+              this._onDidChangeTreeData.fire();
+            }
+          });
+        });
+      });
+    }).on('error', (err: Error) => {
+      vscode.window.showErrorMessage(t('sshError', { error: err.message }));
+    }).connect(config);
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {

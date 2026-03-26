@@ -1,4 +1,3 @@
-console.log('[remotix] ' + t('extensionActivated'));
 import * as vscode from 'vscode';
 import { t } from './lang';
 import * as path from 'path';
@@ -12,7 +11,11 @@ import { ConnectConfig } from 'ssh2';
 
 export function activate(context: vscode.ExtensionContext) {
   const treeDataProvider = new RemotixTreeDataProvider(context);
-  vscode.window.registerTreeDataProvider('remotixView', treeDataProvider);
+  const treeView = vscode.window.createTreeView('remotixView', {
+    treeDataProvider,
+    dragAndDropController: treeDataProvider
+  });
+  context.subscriptions.push(treeView);
 
   context.subscriptions.push(vscode.commands.registerCommand('remotix.moreActions', async () => {
     const pick = await vscode.window.showQuickPick([

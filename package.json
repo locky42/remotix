@@ -119,12 +119,12 @@
       "view/item/context": [
         {
           "command": "remotix.createFile",
-          "when": "view == remotixView && viewItem == ssh-folder",
+          "when": "view == remotixView && (viewItem == ssh-folder || viewItem == ssh-file)",
           "group": "0_create@1"
         },
         {
           "command": "remotix.createFolder",
-          "when": "view == remotixView && viewItem == ssh-folder",
+          "when": "view == remotixView && (viewItem == ssh-folder || viewItem == ssh-file)",
           "group": "0_create@2"
         },
         {
