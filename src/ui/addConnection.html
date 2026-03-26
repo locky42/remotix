@@ -71,10 +71,10 @@
         </select>
       </label>
     </div>
-    <div class="row"><label>{{NAME}}<input id="label" name="label" required value="{{LABEL}}"></label></div>
-    <div class="row"><label>{{HOST}}<input id="host" name="host" required value="{{HOST}}"></label></div>
-    <div class="row"><label>{{PORT}}<input id="port" name="port" value="{{PORT}}" required></label></div>
-    <div class="row"><label>{{USER}}<input id="user" name="user" required value="{{USER}}"></label></div>
+    <div class="row"><label>{{NAME}}<input id="label" name="label" required value="{{LABEL_VALUE}}"></label></div>
+    <div class="row"><label>{{HOST}}<input id="host" name="host" required value="{{HOST_VALUE}}"></label></div>
+    <div class="row"><label>{{PORT}}<input id="port" name="port" value="{{PORT_VALUE}}" required></label></div>
+    <div class="row"><label>{{USER}}<input id="user" name="user" required value="{{USER_VALUE}}"></label></div>
     <div class="row" id="authMethodRow">
       <label>{{AUTH_METHOD_LABEL}}
         <select id="authMethod" name="authMethod">
@@ -83,10 +83,10 @@
         </select>
       </label>
     </div>
-    <div class="row" id="passwordRow"><label>{{PASSWORD}}<input id="password" name="password" type="password" value="{{PASSWORD}}"></label></div>
+    <div class="row" id="passwordRow"><label>{{PASSWORD}}<input id="password" name="password" type="password" value="{{PASSWORD_VALUE}}"></label></div>
     <div class="row file-row" id="authFileRow">
       <label style="flex:1">{{AUTH_FILE_LABEL}}
-        <input id="authFile" name="authFile" placeholder="{{AUTH_FILE_PLACEHOLDER}}" value="{{AUTHFILE}}">
+        <input id="authFile" name="authFile" placeholder="{{AUTH_FILE_PLACEHOLDER}}" value="{{AUTHFILE_VALUE}}">
       </label>
       <button type="button" id="pickFileBtn" title="{{PICK_FILE}}" tabindex="-1">...</button>
     </div>

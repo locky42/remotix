@@ -4,7 +4,7 @@ import { ConnectionItem } from './types';
 import { t } from './lang';
 // @ts-ignore
 import { Client, ConnectConfig } from 'ssh2';
-import { getGlobalConfig } from './extension';
+import { getGlobalConfig } from './config';
 
 export class RemotixTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();

@@ -3,8 +3,10 @@ import * as vscode from 'vscode';
 import { t } from './lang';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ConnectionItem, RemotixConfig } from './types';
+import { ConnectionItem } from './types';
 import { RemotixTreeDataProvider } from './treeData';
+import { getGlobalConfig, saveGlobalConfig, getProjectConfig, saveProjectConfig } from './config';
+import { getAddConnectionHtml } from './webview';
 // @ts-ignore
 import { ConnectConfig } from 'ssh2';
 
@@ -415,39 +417,6 @@ export function activate(context: vscode.ExtensionContext) {
   }));
 }
 
-function getAddConnectionHtml(init?: Partial<ConnectionItem>): string {
-  const htmlPath = path.join(__dirname, 'ui', 'addConnection.html');
-  let html = fs.readFileSync(htmlPath, 'utf8');
-  html = html.replace(/\{\{TITLE\}\}/g, init ? t('editConnectionTitle') : t('addConnectionTitle'));
-  html = html.replace(/\{\{SUBMIT\}\}/g, init ? t('submitSave') : t('submitAdd'));
-  html = html.replace(/\{\{GLOBAL\}\}/g, t('global'));
-  html = html.replace(/\{\{TYPE_LABEL\}\}/g, t('typeLabel'));
-  html = html.replace(/\{\{SSH\}\}/g, t('ssh'));
-  html = html.replace(/\{\{FTP\}\}/g, t('ftp'));
-  html = html.replace(/\{\{NAME\}\}/g, t('name'));
-  html = html.replace(/\{\{HOST\}\}/g, t('host'));
-  html = html.replace(/\{\{PORT\}\}/g, t('port'));
-  html = html.replace(/\{\{USER\}\}/g, t('user'));
-  html = html.replace(/\{\{AUTH_METHOD_LABEL\}\}/g, t('authMethodLabel'));
-  html = html.replace(/\{\{PASSWORD\}\}/g, t('password'));
-  html = html.replace(/\{\{SSH_KEY\}\}/g, t('sshKey'));
-  html = html.replace(/\{\{PASSWORD_SELECTED\}\}/g, init?.authMethod === 'password' ? 'selected' : '');
-  html = html.replace(/\{\{KEY_SELECTED\}\}/g, init?.authMethod === 'privateKey' ? 'selected' : '');
-  html = html.replace(/\{\{PASSWORD\}\}/g, init?.password || '');
-  html = html.replace(/\{\{AUTH_FILE_LABEL\}\}/g, t('authFileLabel'));
-  html = html.replace(/\{\{AUTH_FILE_PLACEHOLDER\}\}/g, t('authFilePlaceholder'));
-  html = html.replace(/\{\{AUTHFILE\}\}/g, init?.authFile || '');
-  html = html.replace(/\{\{PICK_FILE\}\}/g, t('pickFile'));
-  html = html.replace(/\{\{CANCEL\}\}/g, t('cancel'));
-  html = html.replace(/\{\{SSH_SELECTED\}\}/g, init?.type === 'ssh' ? 'selected' : '');
-  html = html.replace(/\{\{FTP_SELECTED\}\}/g, init?.type === 'ftp' ? 'selected' : '');
-  html = html.replace(/\{\{LABEL\}\}/g, init?.label ? (init.label.replace(/^\w+: /, '')) : '');
-  html = html.replace(/\{\{HOST\}\}/g, init?.detail ? (init.detail.split('@')[1]?.split(':')[0] || '') : '');
-  html = html.replace(/\{\{PORT\}\}/g, init?.port || '22');
-  html = html.replace(/\{\{USER\}\}/g, init?.user || (init?.detail ? (init.detail.split('@')[0] || '') : ''));
-  return html;
-}
-
 function saveConnection(conn: ConnectionItem, global: boolean, context: vscode.ExtensionContext) {
   if (global) {
     const config = getGlobalConfig(context);
@@ -458,44 +427,6 @@ function saveConnection(conn: ConnectionItem, global: boolean, context: vscode.E
     config.connections.push(conn);
     saveProjectConfig(config);
   }
-}
-
-export function getGlobalConfig(context: vscode.ExtensionContext): RemotixConfig {
-  const configPath = getGlobalConfigPath(context);
-  if (fs.existsSync(configPath)) {
-    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  }
-  return { connections: [] };
-}
-
-export function saveGlobalConfig(context: vscode.ExtensionContext, config: RemotixConfig) {
-  const configPath = getGlobalConfigPath(context);
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
-}
-
-function getGlobalConfigPath(context: vscode.ExtensionContext) {
-  const dir = context.globalStorageUri.fsPath;
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, 'remotix-connections.json');
-}
-
-function getProjectConfig(): RemotixConfig {
-  const configPath = getProjectConfigPath();
-  if (fs.existsSync(configPath)) {
-    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  }
-  return { connections: [] };
-}
-
-function saveProjectConfig(config: RemotixConfig) {
-  const configPath = getProjectConfigPath();
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
-}
-
-function getProjectConfigPath() {
-  const wsFolders = vscode.workspace.workspaceFolders;
-  if (!wsFolders || wsFolders.length === 0) return '.remotix-connections.json';
-  return path.join(wsFolders[0].uri.fsPath, '.remotix-connections.json');
 }
 
 export function deactivate() {}
