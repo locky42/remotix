@@ -415,6 +415,34 @@ export function activate(context: vscode.ExtensionContext) {
     terminal.sendText(sshCmd);
     terminal.show();
   }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.deleteConnection', async (item: vscode.TreeItem) => {
+    const label = item.label as string;
+    const conn = treeDataProvider.getConnectionByLabel(label);
+    if (!conn) return;
+    const confirm = await vscode.window.showWarningMessage(
+      t('confirmDeleteConnection', { label }),
+      { modal: true },
+      t('delete')
+    );
+    if (confirm !== t('delete')) return;
+    // Remove from global config
+    const globalConfig = getGlobalConfig(context);
+    const idx = globalConfig.connections.findIndex(c => c.label === label);
+    if (idx !== -1) {
+      globalConfig.connections.splice(idx, 1);
+      saveGlobalConfig(context, globalConfig);
+    }
+    // Remove from project config
+    const projectConfig = getProjectConfig();
+    const idx2 = projectConfig.connections.findIndex(c => c.label === label);
+    if (idx2 !== -1) {
+      projectConfig.connections.splice(idx2, 1);
+      saveProjectConfig(projectConfig);
+    }
+    treeDataProvider.removeConnection(label);
+    vscode.window.showInformationMessage(t('connectionDeleted', { label }));
+  }));
 }
 
 function saveConnection(conn: ConnectionItem, global: boolean, context: vscode.ExtensionContext) {

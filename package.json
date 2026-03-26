@@ -59,6 +59,10 @@
       {
         "command": "remotix.importFileZilla",
         "title": "Remotix: Import from FileZilla"
+      },
+      {
+        "command": "remotix.deleteConnection",
+        "title": "Remotix: Delete connection"
       }
     ],
     "menus": {
@@ -75,6 +79,11 @@
           "command": "remotix.editConnection",
           "when": "view == remotixView",
           "group": "navigation"
+        },
+        {
+          "command": "remotix.deleteConnection",
+          "when": "view == remotixView",
+          "group": "navigation@2"
         },
         {
           "command": "remotix.openSshTerminal",

@@ -50,5 +50,8 @@
   "password": "Password",
   "sshKey": "SSH key",
   "authFileLabel": "Authorization file (ssh key)",
-  "authFilePlaceholder": "Path to file"
+  "authFilePlaceholder": "Path to file",
+  "delete": "Delete",
+  "confirmDeleteConnection": "Delete connection '{label}'?",
+  "connectionDeleted": "Connection '{label}' deleted."
 }

@@ -50,5 +50,8 @@
   "password": "Пароль",
   "sshKey": "SSH ключ",
   "authFileLabel": "Файл авторизації (ssh ключ)",
-  "authFilePlaceholder": "Шлях до файлу"
+  "authFilePlaceholder": "Шлях до файлу",
+  "delete": "Видалити",
+  "confirmDeleteConnection": "Видалити підключення '{label}'?",
+  "connectionDeleted": "Підключення '{label}' видалено."
 }

@@ -11,12 +11,25 @@ export class RemotixTreeDataProvider implements vscode.TreeDataProvider<vscode.T
   readonly onDidChangeTreeData: vscode.Event<void> = this._onDidChangeTreeData.event;
   private connections: ConnectionItem[];
 
+  private context: vscode.ExtensionContext;
   constructor(context: vscode.ExtensionContext) {
+    this.context = context;
     this.connections = getGlobalConfig(context).connections;
   }
 
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+    // Add contextValue for delete button
+    if ((element as any).contextValue === 'connection') {
+      element.contextValue = 'connection';
+    }
     return element;
+  }
+  removeConnection(label: string) {
+    const idx = this.connections.findIndex(c => c.label === label);
+    if (idx !== -1) {
+      this.connections.splice(idx, 1);
+      this._onDidChangeTreeData.fire();
+    }
   }
 
   getConnectionByLabel(label: string): ConnectionItem | undefined {
