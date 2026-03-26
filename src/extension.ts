@@ -1,4 +1,4 @@
-console.log('[remotix] Extension activated');
+console.log('[remotix] ' + t('extensionActivated'));
 import * as vscode from 'vscode';
 import { t } from './lang';
 import * as path from 'path';
@@ -449,6 +449,297 @@ export function activate(context: vscode.ExtensionContext) {
     }
     treeDataProvider.removeConnection(label);
     vscode.window.showInformationMessage(t('connectionDeleted', { label }));
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.rename', async (item: vscode.TreeItem) => {
+    const labelStr = typeof item.label === 'string' ? item.label : (item.label && typeof item.label.label === 'string' ? item.label.label : String(item.label));
+    vscode.window.showInformationMessage(t('renameClicked', { label: labelStr }));
+    const oldLabel = labelStr;
+    const sshPath = (item as any).sshPath;
+    const connectionLabel = (item as any).connectionLabel;
+    if (!sshPath || !connectionLabel) {
+      vscode.window.showErrorMessage(t('missingSshPathOrConnectionLabel'));
+      return;
+    }
+    const newName = await vscode.window.showInputBox({
+      prompt: t ? t('rename') : 'Enter new name',
+      value: oldLabel
+    });
+    if (!newName || newName === oldLabel) return;
+    const treeDataProviderAny = treeDataProvider as any;
+    const conn = treeDataProviderAny.getConnectionByLabel
+      ? treeDataProviderAny.getConnectionByLabel(connectionLabel)
+      : undefined;
+    if (!conn) {
+      vscode.window.showErrorMessage(t('connectionNotFound'));
+      return;
+    }
+    const { Client } = require('ssh2');
+    const ssh = new Client();
+    const config: any = {
+      host: conn.host || (conn.detail ? conn.detail.split('@')[1]?.split(':')[0] : ''),
+      port: conn.port ? parseInt(conn.port) : 22,
+      username: conn.user || (conn.detail ? conn.detail.split('@')[0] : ''),
+    };
+    if (conn.authMethod === 'privateKey' && conn.authFile) {
+      try {
+        config.privateKey = fs.readFileSync(conn.authFile);
+      } catch (e) {
+        vscode.window.showErrorMessage(t('cannotReadKey', { error: (e instanceof Error ? e.message : String(e)) }));
+        return;
+      }
+    } else if (conn.password) {
+      config.password = conn.password;
+    }
+    const oldPath = sshPath;
+    const newPath = oldPath.replace(/[^/]+$/, newName);
+    ssh.on('ready', () => {
+      ssh.sftp((err: Error | undefined, sftp: any) => {
+        if (err) {
+          vscode.window.showErrorMessage(t('sftpError', { error: err.message }));
+          ssh.end();
+          return;
+        }
+        sftp.rename(oldPath, newPath, (err2: Error | null) => {
+          ssh.end();
+          if (err2) {
+            vscode.window.showErrorMessage(t('renameFailed', { error: err2.message }));
+          } else {
+            vscode.window.showInformationMessage(t('renamedTo', { name: newName }));
+            treeDataProvider.refresh();
+          }
+        });
+      });
+    }).on('error', (err: Error) => {
+      vscode.window.showErrorMessage(t('sshError', { error: err.message }));
+    }).connect(config);
+  }));
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.createFolder', async (item: any) => {
+    const sshPath = item?.sshPath;
+    const connectionLabel = item?.connectionLabel;
+    if (!sshPath || !connectionLabel) {
+      vscode.window.showErrorMessage(t('missingPathOrConnection'));
+      return;
+    }
+    const treeDataProviderAny = treeDataProvider as any;
+    const conn = treeDataProviderAny.getConnectionByLabel
+      ? treeDataProviderAny.getConnectionByLabel(connectionLabel)
+      : undefined;
+    if (!conn) {
+      vscode.window.showErrorMessage(t('connectionNotFound'));
+      return;
+    }
+    const newFolderName = await vscode.window.showInputBox({
+      prompt: t('enterNewFolderName'),
+      value: 'new-folder'
+    });
+    if (!newFolderName) return;
+    const { Client } = require('ssh2');
+    const ssh = new Client();
+    const config: any = {
+      host: conn.host || (conn.detail ? conn.detail.split('@')[1]?.split(':')[0] : ''),
+      port: conn.port ? parseInt(conn.port) : 22,
+      username: conn.user || (conn.detail ? conn.detail.split('@')[0] : ''),
+    };
+    if (conn.authMethod === 'privateKey' && conn.authFile) {
+      try {
+        config.privateKey = fs.readFileSync(conn.authFile);
+      } catch (e) {
+        vscode.window.showErrorMessage(t('cannotReadKey', { error: (e instanceof Error ? e.message : String(e)) }));
+        return;
+      }
+    } else if (conn.password) {
+      config.password = conn.password;
+    }
+    const newFolderPath = sshPath.replace(/\/[^/]*$/, '') + '/' + newFolderName;
+    ssh.on('ready', () => {
+      ssh.sftp((err: Error | undefined, sftp: any) => {
+        if (err) {
+          vscode.window.showErrorMessage(t('sftpError', { error: err.message }));
+          ssh.end();
+          return;
+        }
+        sftp.mkdir(newFolderPath, (err2: Error | null) => {
+          ssh.end();
+          if (err2) {
+            vscode.window.showErrorMessage(t('createFolderFailed', { error: err2.message }));
+          } else {
+            vscode.window.showInformationMessage(t('folderCreated', { path: newFolderPath }));
+            treeDataProvider.refresh();
+          }
+        });
+      });
+    }).on('error', (err: Error) => {
+      vscode.window.showErrorMessage('SSH помилка: ' + err.message);
+    }).connect(config);
+  }));
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.createFile', async (item: any) => {
+    const sshPath = item?.sshPath;
+    const connectionLabel = item?.connectionLabel;
+    if (!sshPath || !connectionLabel) {
+      vscode.window.showErrorMessage(t('missingPathOrConnection'));
+      return;
+    }
+    const treeDataProviderAny = treeDataProvider as any;
+    const conn = treeDataProviderAny.getConnectionByLabel
+      ? treeDataProviderAny.getConnectionByLabel(connectionLabel)
+      : undefined;
+    if (!conn) {
+      vscode.window.showErrorMessage(t('connectionNotFound'));
+      return;
+    }
+    const newFileName = await vscode.window.showInputBox({
+      prompt: t('enterNewFileName'),
+      value: 'new-file.txt'
+    });
+    if (!newFileName) return;
+    let newFilePath: string;
+    if (item?.contextValue === 'ssh-folder') {
+      newFilePath = (sshPath.endsWith('/') ? sshPath : sshPath + '/') + newFileName;
+    } else {
+      newFilePath = sshPath.replace(/\/[^/]*$/, '') + '/' + newFileName;
+    }
+    const { Client } = require('ssh2');
+    const ssh = new Client();
+    const config: any = {
+      host: conn.host || (conn.detail ? conn.detail.split('@')[1]?.split(':')[0] : ''),
+      port: conn.port ? parseInt(conn.port) : 22,
+      username: conn.user || (conn.detail ? conn.detail.split('@')[0] : ''),
+    };
+    if (conn.authMethod === 'privateKey' && conn.authFile) {
+      try {
+        config.privateKey = fs.readFileSync(conn.authFile);
+      } catch (e) {
+        vscode.window.showErrorMessage(t('cannotReadKey', { error: (e instanceof Error ? e.message : String(e)) }));
+        return;
+      }
+    } else if (conn.password) {
+      config.password = conn.password;
+    }
+    ssh.on('ready', () => {
+      ssh.sftp((err: Error | undefined, sftp: any) => {
+        if (err) {
+          vscode.window.showErrorMessage(t('sftpError', { error: err.message }));
+          ssh.end();
+          return;
+        }
+        
+        const writeStream = sftp.createWriteStream(newFilePath, { flags: 'w', encoding: 'utf8' });
+        writeStream.on('close', () => {
+          ssh.end();
+          vscode.window.showInformationMessage(t('fileCreated', { path: newFilePath }));
+          treeDataProvider.refresh();
+        });
+        writeStream.on('error', (err2: Error) => {
+          ssh.end();
+          vscode.window.showErrorMessage(t('createFileFailed', { error: err2.message }));
+        });
+        writeStream.end('');
+      });
+    }).on('error', (err: Error) => {
+      vscode.window.showErrorMessage('SSH помилка: ' + err.message);
+    }).connect(config);
+  }));
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.deleteFile', async (item: any) => {
+    const sshPath = item?.sshPath;
+    const connectionLabel = item?.connectionLabel;
+    if (!sshPath || !connectionLabel) {
+      vscode.window.showErrorMessage(t('missingPathOrConnection'));
+      return;
+    }
+    const treeDataProviderAny = treeDataProvider as any;
+    const conn = treeDataProviderAny.getConnectionByLabel
+      ? treeDataProviderAny.getConnectionByLabel(connectionLabel)
+      : undefined;
+    if (!conn) {
+      vscode.window.showErrorMessage(t('connectionNotFound'));
+      return;
+    }
+    const confirm = await vscode.window.showWarningMessage(
+      t(item.contextValue === 'ssh-folder' ? 'confirmDeleteFolder' : 'confirmDeleteFile', { path: sshPath }),
+      { modal: true },
+      t('delete')
+    );
+    if (confirm !== t('delete')) return;
+    const { Client } = require('ssh2');
+    const ssh = new Client();
+    const config: any = {
+      host: conn.host || (conn.detail ? conn.detail.split('@')[1]?.split(':')[0] : ''),
+      port: conn.port ? parseInt(conn.port) : 22,
+      username: conn.user || (conn.detail ? conn.detail.split('@')[0] : ''),
+    };
+    if (conn.authMethod === 'privateKey' && conn.authFile) {
+      try {
+        config.privateKey = fs.readFileSync(conn.authFile);
+      } catch (e) {
+        vscode.window.showErrorMessage('Не вдалося прочитати ключ: ' + (e instanceof Error ? e.message : String(e)));
+        return;
+      }
+    } else if (conn.password) {
+      config.password = conn.password;
+    }
+    ssh.on('ready', () => {
+      ssh.sftp((err: Error | undefined, sftp: any) => {
+        if (err) {
+          vscode.window.showErrorMessage(t('sftpError', { error: err.message }));
+          ssh.end();
+          return;
+        }
+        if (item.contextValue === 'ssh-folder') {
+          const rmDir = (dirPath: string, done: (err?: Error | null) => void) => {
+            sftp.readdir(dirPath, (err: Error | null, list: any[]) => {
+              if (err) return done(err);
+              let i = 0;
+              const next = () => {
+                if (i >= list.length) return sftp.rmdir(dirPath, done);
+                const entry = list[i++];
+                const entryPath = dirPath + '/' + entry.filename;
+                if (entry.longname && entry.longname[0] === 'd') {
+                  rmDir(entryPath, (err2) => {
+                    if (err2) return done(err2);
+                    next();
+                  });
+                } else {
+                  sftp.unlink(entryPath, (err2: Error | null) => {
+                    if (err2) return done(err2);
+                    next();
+                  });
+                }
+              };
+              next();
+            });
+          };
+          rmDir(sshPath, (err2) => {
+            ssh.end();
+            if (err2) {
+              vscode.window.showErrorMessage(t('deleteFolderFailed', { error: err2.message }));
+            } else {
+              vscode.window.showInformationMessage(t('folderDeleted', { path: sshPath }));
+              treeDataProvider.refresh();
+            }
+          });
+        } else {
+          sftp.unlink(sshPath, (err2: Error | null) => {
+            ssh.end();
+            if (err2) {
+              vscode.window.showErrorMessage(t('deleteFileFailed', { error: err2.message }));
+            } else {
+              vscode.window.showInformationMessage(t('fileDeleted', { path: sshPath }));
+              treeDataProvider.refresh();
+            }
+          });
+        }
+      });
+    }).on('error', (err: Error) => {
+      vscode.window.showErrorMessage('SSH помилка: ' + err.message);
+    }).connect(config);
+  }));
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.refresh', async () => {
+    treeDataProvider.refresh();
+  }));
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.showConfig', async () => {
+    const config = getGlobalConfig(context);
+    vscode.window.showInformationMessage('Global config: ' + JSON.stringify(config));
   }));
 }
 

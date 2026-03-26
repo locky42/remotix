@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { ConnectionItem } from './types';
 import { t } from './lang';
@@ -143,6 +142,16 @@ export class RemotixTreeDataProvider implements vscode.TreeDataProvider<vscode.T
                 };
               }
               return item;
+            });
+            items.sort((a, b) => {
+              const getLabelString = (lbl: string | vscode.TreeItemLabel | undefined) => {
+                if (!lbl) return '';
+                if (typeof lbl === 'string') return lbl;
+                return lbl.label || '';
+              };
+              const aLabel = getLabelString(a.label);
+              const bLabel = getLabelString(b.label);
+              return aLabel.localeCompare(bLabel, 'uk');
             });
             ssh.end();
             resolve(items);

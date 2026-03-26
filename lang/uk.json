@@ -55,3 +55,23 @@
   "confirmDeleteConnection": "Видалити підключення '{label}'?",
   "connectionDeleted": "Підключення '{label}' видалено."
 }
+,
+  "extensionActivated": "Розширення активовано",
+  "renameClicked": "Remotix: Натиснуто перейменування для {label}",
+  "missingSshPathOrConnectionLabel": "Не вказано sshPath або connectionLabel",
+  "connectionNotFound": "Підключення не знайдено",
+  "renameFailed": "Не вдалося перейменувати: {error}",
+  "renamedTo": "Перейменовано на {name}",
+  "missingPathOrConnection": "Не вказано шлях або підключення",
+  "enterNewFolderName": "Введіть назву нової папки",
+  "createFolderFailed": "Не вдалося створити папку: {error}",
+  "folderCreated": "Папку створено: {path}",
+  "enterNewFileName": "Введіть назву нового файлу",
+  "fileCreated": "Файл створено: {path}",
+  "createFileFailed": "Не вдалося створити файл: {error}",
+  "confirmDeleteFolder": "Ви дійсно бажаєте видалити папку {path}?",
+  "confirmDeleteFile": "Ви дійсно бажаєте видалити файл {path}?",
+  "deleteFolderFailed": "Не вдалося видалити папку: {error}",
+  "folderDeleted": "Папку видалено: {path}",
+  "deleteFileFailed": "Не вдалося видалити файл: {error}",
+  "fileDeleted": "Файл видалено: {path}"

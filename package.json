@@ -18,85 +18,159 @@
     "onCommand:remotix.openSshTerminal",
     "onCommand:remotix.downloadFile",
     "onCommand:remotix.uploadFile",
-      "onCommand:remotix.editFile",
-      "onCommand:remotix.importFileZilla"
+    "onCommand:remotix.editFile",
+    "onCommand:remotix.deleteFile",
+    "onCommand:remotix.rename",
+    "onCommand:remotix.copyPath",
+    "onCommand:remotix.importFileZilla",
+    "onCommand:remotix.deleteConnection",
+    "onCommand:remotix.createFile",
+    "onCommand:remotix.createFolder"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "remotix.addConnection",
-        "title": "Remotix: Add connection"
+        "title": "Remotix: Add connection",
+        "icon": "$(add)"
       },
       {
         "command": "remotix.editConnection",
-        "title": "Remotix: Edit connection"
+        "title": "Edit Connection",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "remotix.deleteConnection",
+        "title": "Delete Connection",
+        "icon": "$(trash)"
       },
       {
         "command": "remotix.openSshTerminal",
-        "title": "Remotix: Open SSH Terminal"
-      },
-      {
-        "command": "remotix.downloadFile",
-        "title": "Remotix: Download File (from server)"
-      },
-      {
-        "command": "remotix.uploadFile",
-        "title": "Remotix: Upload File (to server)"
+        "title": "Open SSH Terminal",
+        "icon": "$(terminal)"
       },
       {
         "command": "remotix.editFile",
-        "title": "Remotix: Edit File (open)"
+        "title": "Edit File",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "remotix.downloadFile",
+        "title": "Download",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "remotix.uploadFile",
+        "title": "Upload",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "remotix.rename",
+        "title": "Rename",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "remotix.deleteFile",
+        "title": "Delete",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "remotix.copyPath",
+        "title": "Copy Path"
       },
       {
         "command": "remotix.importSshConfig",
         "title": "Remotix: Import from SSH config"
       },
       {
-        "command": "remotix.moreActions",
-        "title": "..."
-      },
-      {
         "command": "remotix.importFileZilla",
         "title": "Remotix: Import from FileZilla"
       },
       {
-        "command": "remotix.deleteConnection",
-        "title": "Remotix: Delete connection"
+        "command": "remotix.moreActions",
+        "title": "More Actions..."
+      },
+      {
+        "command": "remotix.createFile",
+        "title": "Create File",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "remotix.createFolder",
+        "title": "Create Folder",
+        "icon": "$(new-folder)"
       }
     ],
     "menus": {
       "view/title": [
         {
+          "command": "remotix.addConnection",
+          "when": "view == remotixView",
+          "group": "navigation@1"
+        },
+        {
           "command": "remotix.moreActions",
           "when": "view == remotixView",
-          "group": "navigation@1",
+          "group": "navigation@2",
           "icon": "$(ellipsis)"
         }
       ],
       "view/item/context": [
         {
-          "command": "remotix.editConnection",
-          "when": "view == remotixView",
-          "group": "navigation"
+          "command": "remotix.createFile",
+          "when": "view == remotixView && viewItem == ssh-folder",
+          "group": "0_create@1"
         },
         {
-          "command": "remotix.deleteConnection",
-          "when": "view == remotixView",
-          "group": "navigation@2"
+          "command": "remotix.createFolder",
+          "when": "view == remotixView && viewItem == ssh-folder",
+          "group": "0_create@2"
+        },
+        {
+          "command": "remotix.editFile",
+          "when": "view == remotixView && viewItem == ssh-file",
+          "group": "navigation"
         },
         {
           "command": "remotix.openSshTerminal",
-          "when": "view == remotixView && viewItem == ssh",
+          "when": "view == remotixView && (viewItem == connection || viewItem == ssh-folder)",
           "group": "navigation"
         },
         {
+          "command": "remotix.editConnection",
+          "when": "view == remotixView && viewItem == connection",
+          "group": "1_connection"
+        },
+        {
+          "command": "remotix.copyPath",
+          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder)",
+          "group": "2_path"
+        },
+        {
           "command": "remotix.downloadFile",
-          "when": "view == remotixView && viewItem == ssh-file"
+          "when": "view == remotixView && viewItem == ssh-file",
+          "group": "3_transfer"
         },
         {
           "command": "remotix.uploadFile",
-          "when": "view == remotixView && viewItem == ssh-folder"
+          "when": "view == remotixView && viewItem == ssh-folder",
+          "group": "3_transfer"
+        },
+        {
+          "command": "remotix.rename",
+          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder)",
+          "group": "4_modification@1"
+        },
+        {
+          "command": "remotix.deleteFile",
+          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder)",
+          "group": "4_modification@2"
+        },
+        {
+          "command": "remotix.deleteConnection",
+          "when": "view == remotixView && viewItem == connection",
+          "group": "4_modification@3"
         }
       ]
     },
@@ -113,7 +187,8 @@
       "remotix-activitybar": [
         {
           "id": "remotixView",
-          "name": "Remotix Panel"
+          "name": "Remotix Panel",
+          "dragAndDropController": true
         }
       ]
     }
