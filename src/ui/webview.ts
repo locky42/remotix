@@ -1,10 +1,10 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { t } from './lang';
-import { ConnectionItem } from './types';
+import { t } from '../lang';
+import { ConnectionItem } from '../types';
 
 export function getAddConnectionHtml(init?: Partial<ConnectionItem>): string {
-    const htmlPath = path.join(__dirname, 'ui', 'addConnection.html');
+    const htmlPath = path.join(__dirname, 'addConnection.html');
     let html = fs.readFileSync(htmlPath, 'utf8');
     html = html.replace(/\{\{TITLE\}\}/g, init ? t('editConnectionTitle') : t('addConnectionTitle'));
     html = html.replace(/\{\{SUBMIT\}\}/g, init ? t('submitSave') : t('submitAdd'));

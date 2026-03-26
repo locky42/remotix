@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import { ConnectionItem } from './types';
 import { RemotixTreeDataProvider } from './treeData';
 import { getGlobalConfig, saveGlobalConfig, getProjectConfig, saveProjectConfig } from './config';
-import { getAddConnectionHtml } from './webview';
+import { getAddConnectionHtml } from './ui/webview';
 // @ts-ignore
 import { ConnectConfig } from 'ssh2';
 
