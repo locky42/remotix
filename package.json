@@ -4,6 +4,10 @@
   "description": "FTP and SSH client extension for Visual Studio Code",
   "version": "0.0.1",
   "publisher": "locky42",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/locky42/remotix.git"
+  },
   "engines": {
     "vscode": ">=1.70.0"
   },
