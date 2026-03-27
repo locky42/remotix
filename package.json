@@ -17,7 +17,7 @@
     "onCommand:remotix.editConnection",
     "onCommand:remotix.openSshTerminal",
     "onCommand:remotix.downloadFile",
-    "onCommand:remotix.uploadFile",
+    "onCommand:remotix.upload",
     "onCommand:remotix.editFile",
     "onCommand:remotix.deleteFile",
     "onCommand:remotix.rename",
@@ -61,9 +61,14 @@
         "icon": "$(cloud-download)"
       },
       {
-        "command": "remotix.uploadFile",
+        "command": "remotix.upload",
         "title": "Upload",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "remotix.download",
+        "title": "Download",
+        "icon": "$(cloud-download)"
       },
       {
         "command": "remotix.rename",
@@ -153,8 +158,18 @@
           "group": "3_transfer"
         },
         {
-          "command": "remotix.uploadFile",
+          "command": "remotix.upload",
           "when": "view == remotixView && viewItem == ssh-folder",
+          "group": "3_transfer"
+        },
+        {
+          "command": "remotix.upload",
+          "when": "view == remotixView && viewItem == ftp-folder",
+          "group": "3_transfer"
+        },
+        {
+          "command": "remotix.download",
+          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder || viewItem == ftp-file || viewItem == ftp-folder)",
           "group": "3_transfer"
         },
         {

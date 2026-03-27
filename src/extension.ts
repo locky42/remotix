@@ -18,6 +18,328 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(treeView);
 
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.download', async (item: any) => {
+    const connectionLabel = item?.connectionLabel;
+    const remotePath = item?.sshPath || item?.ftpPath;
+    const isDirectory = item?.contextValue === 'ssh-folder' || item?.contextValue === 'ftp-folder';
+
+    if (!connectionLabel || !remotePath) {
+        vscode.window.showErrorMessage(t('missingPathOrConnection'));
+        return;
+    }
+
+    const treeDataProviderAny = treeDataProvider as any;
+    const conn = treeDataProviderAny.getConnectionByLabel(connectionLabel);
+    if (!conn) {
+        vscode.window.showErrorMessage(t('connectionNotFound'));
+        return;
+    }
+
+    const uri = await vscode.window.showOpenDialog({
+        canSelectFolders: true,
+        canSelectFiles: false,
+        openLabel: t('chooseDownloadTarget'),
+        defaultUri: vscode.Uri.file(process.env.HOME || '.')
+    });
+
+    if (!uri || uri.length === 0) return;
+    const localTarget = uri[0].fsPath;
+    const pathMod = require('path');
+    const localDest = pathMod.join(localTarget, pathMod.basename(remotePath));
+
+    if (conn.type === 'ftp') {
+        const { Client } = require('basic-ftp');
+        const client = new Client();
+        // Вмикаємо логування для відладки (можна прибрати потім)
+        client.ftp.verbose = true; 
+
+        try {
+            await client.access({
+                host: conn.host,
+                port: Number(conn.port) || 21,
+                user: conn.user,
+                password: conn.password,
+                secure: true,
+                secureOptions: { rejectUnauthorized: false }
+            });
+
+            if (isDirectory) {
+                // Завантаження папки
+                await client.downloadToDir(localDest, remotePath);
+            } else {
+                // Завантаження файлу. 
+                // ВАЖЛИВО: downloadTo приймає (локальний_шлях_до_файлу, віддалений_шлях)
+                await client.downloadTo(localDest, remotePath);
+            }
+
+            vscode.window.showInformationMessage(t('downloadSuccess'));
+        } catch (err: any) {
+            console.error('FTP Error:', err);
+            vscode.window.showErrorMessage(t('downloadError', { error: err.message }));
+        } finally {
+            client.close();
+        }
+        return;
+    }
+  
+    // SSH download
+    const { Client } = require('ssh2');
+    const ssh = new Client();
+    const config: any = {
+      host: conn.host || (conn.detail ? conn.detail.split('@')[1]?.split(':')[0] : ''),
+      port: conn.port ? parseInt(conn.port) : 22,
+      username: conn.user || (conn.detail ? conn.detail.split('@')[0] : ''),
+    };
+    if (conn.authMethod === 'privateKey' && conn.authFile) {
+      try {
+        config.privateKey = fs.readFileSync(conn.authFile);
+      } catch (e) {
+        vscode.window.showErrorMessage(t('cannotReadKey', { error: (e instanceof Error ? e.message : String(e)) }));
+        return;
+      }
+    } else if (conn.password) {
+      config.password = conn.password;
+    }
+    ssh.on('ready', () => {
+      ssh.sftp((err: Error | undefined, sftp: any) => {
+        if (err) {
+          vscode.window.showErrorMessage(t('sftpError', { error: err.message }));
+          ssh.end();
+          return;
+        }
+        const downloadFile = (remote: string, local: string, cb: (err?: Error | null) => void) => {
+          let called = false;
+          const done = (err?: Error | null) => {
+            if (!called) {
+              called = true;
+              cb(err);
+            }
+          };
+          const writeStream = fs.createWriteStream(local);
+          const readStream = sftp.createReadStream(remote);
+          writeStream.on('close', () => done());
+          writeStream.on('error', done);
+          readStream.on('error', done);
+          readStream.pipe(writeStream);
+        };
+        const downloadDir = (remoteDir: string, localDir: string, cb: (err?: Error | null) => void) => {
+          sftp.readdir(remoteDir, (err: Error | null, list: any[]) => {
+            if (err) return cb(err);
+            fs.mkdirSync(localDir, { recursive: true });
+            let i = 0;
+            let errorOccurred = false;
+            const next = () => {
+              if (errorOccurred) return;
+              if (i >= list.length) return cb();
+              const entry = list[i++];
+              const remotePath = pathMod.join(remoteDir, entry.filename);
+              const localPath = pathMod.join(localDir, entry.filename);
+              if (entry.longname && entry.longname[0] === 'd') {
+                downloadDir(remotePath, localPath, (err2) => {
+                  if (err2) { errorOccurred = true; return cb(err2); }
+                  next();
+                });
+              } else {
+                downloadFile(remotePath, localPath, (err3) => {
+                  if (err3) { errorOccurred = true; return cb(err3); }
+                  next();
+                });
+              }
+            };
+            next();
+          });
+        };
+        sftp.stat(remotePath, (err: Error | null, stats: any) => {
+          if (err) { ssh.end(); vscode.window.showErrorMessage(t('downloadError', { error: err.message })); return; }
+          const dest = pathMod.join(localTarget, pathMod.basename(remotePath));
+          if (stats.isDirectory && stats.isDirectory()) {
+            downloadDir(remotePath, dest, (err2) => {
+              ssh.end();
+              if (err2) {
+                vscode.window.showErrorMessage(t('downloadError', { error: err2.message }));
+              } else {
+                vscode.window.showInformationMessage(t('downloadSuccess'));
+              }
+            });
+          } else {
+            downloadFile(remotePath, dest, (err2) => {
+              ssh.end();
+              if (err2) {
+                vscode.window.showErrorMessage(t('downloadError', { error: err2.message }));
+              } else {
+                vscode.window.showInformationMessage(t('downloadSuccess'));
+              }
+            });
+          }
+        });
+      });
+    }).on('error', (err: Error) => {
+      vscode.window.showErrorMessage(t('sshError', { error: err.message }));
+    }).connect(config);
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.upload', async (item: any) => {
+    // Universal upload logic for files and folders
+    const connectionLabel = item?.connectionLabel;
+    const targetPath = item?.sshPath || item?.ftpPath;
+    if (!connectionLabel || !targetPath) {
+      vscode.window.showErrorMessage(t('missingPathOrConnection'));
+      return;
+    }
+    const treeDataProviderAny = treeDataProvider as any;
+    const conn = treeDataProviderAny.getConnectionByLabel
+      ? treeDataProviderAny.getConnectionByLabel(connectionLabel)
+      : undefined;
+    if (!conn) {
+      vscode.window.showErrorMessage(t('connectionNotFound'));
+      return;
+    }
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
+    const uris = await vscode.window.showOpenDialog({
+      canSelectFiles: true,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: t('chooseFileOrFolderToUpload'),
+      defaultUri: vscode.Uri.file(homeDir)
+    });
+    if (!uris || uris.length === 0) return;
+    const localPath = uris[0].fsPath;
+    const pathMod = require('path');
+    const fs = require('fs');
+    let uploadTarget = targetPath;
+    const stat = fs.statSync(localPath);
+    if (stat.isDirectory()) {
+      // Always create a subfolder in the target with the local folder's name
+      uploadTarget = pathMod.join(targetPath, pathMod.basename(localPath));
+    }
+    if (conn.type === 'ftp') {
+      const { Client } = require('basic-ftp');
+      const client = new Client();
+      try {
+        await client.access({
+          host: conn.host,
+          port: conn.port ? Number(conn.port) : 21,
+          user: conn.user,
+          password: conn.password,
+          secure: true,
+          secureOptions: { rejectUnauthorized: false }
+        });
+        if (stat.isDirectory()) {
+          await client.uploadFromDir(localPath, uploadTarget);
+        } else {
+          await client.uploadFrom(localPath, pathMod.join(uploadTarget, pathMod.basename(localPath)));
+        }
+        await client.close();
+        vscode.window.showInformationMessage(t('uploadSuccess'));
+        treeDataProvider.refresh();
+      } catch (e) {
+        await client.close();
+        vscode.window.showErrorMessage(t('uploadError', { error: (e instanceof Error ? e.message : String(e)) }));
+      }
+      return;
+    }
+    // SSH upload
+    const { Client } = require('ssh2');
+    const ssh = new Client();
+    const config: any = {
+      host: conn.host || (conn.detail ? conn.detail.split('@')[1]?.split(':')[0] : ''),
+      port: conn.port ? parseInt(conn.port) : 22,
+      username: conn.user || (conn.detail ? conn.detail.split('@')[0] : ''),
+    };
+    if (conn.authMethod === 'privateKey' && conn.authFile) {
+      try {
+        config.privateKey = require('fs').readFileSync(conn.authFile);
+      } catch (e) {
+        vscode.window.showErrorMessage(t('cannotReadKey', { error: (e instanceof Error ? e.message : String(e)) }));
+        return;
+      }
+    } else if (conn.password) {
+      config.password = conn.password;
+    }
+    ssh.on('ready', () => {
+      ssh.sftp((err: Error | undefined, sftp: any) => {
+        if (err) {
+          vscode.window.showErrorMessage(t('sftpError', { error: err.message }));
+          ssh.end();
+          return;
+        }
+        const uploadFile = (src: string, dest: string, cb: (err?: Error) => void) => {
+          const readStream = fs.createReadStream(src);
+          const writeStream = sftp.createWriteStream(dest);
+          writeStream.on('close', () => cb());
+          writeStream.on('error', cb);
+          readStream.pipe(writeStream);
+        };
+        const uploadDir = (srcDir: string, destDir: string, cb: (err?: Error) => void) => {
+          (async () => {
+            try {
+              // Always create the root destDir first, but only if it doesn't exist
+              await new Promise<void>((resolve, reject) => {
+                sftp.mkdir(destDir, (err2: Error | null) => {
+                  if (err2 && (err2 as any).code !== 4) return reject(err2);
+                  resolve();
+                });
+              });
+              const entries = await fs.promises.readdir(srcDir, { withFileTypes: true });
+              if (entries.length === 0) {
+                cb();
+                return;
+              }
+              let errorOccurred = false;
+              let remaining = entries.length;
+              for (const entry of entries) {
+                const srcPath = pathMod.join(srcDir, entry.name);
+                const destPath = pathMod.join(destDir, entry.name);
+                if (entry.isDirectory()) {
+                  uploadDir(srcPath, destPath, (err3) => {
+                    if (err3 && !errorOccurred) {
+                      errorOccurred = true;
+                      return cb(err3);
+                    }
+                    if (--remaining === 0 && !errorOccurred) cb();
+                  });
+                } else {
+                  uploadFile(srcPath, destPath, (err4) => {
+                    if (err4 && !errorOccurred) {
+                      errorOccurred = true;
+                      return cb(err4);
+                    }
+                    if (--remaining === 0 && !errorOccurred) cb();
+                  });
+                }
+              }
+            } catch (err) {
+              cb(err as Error);
+            }
+          })();
+        };
+        if (stat.isDirectory()) {
+          uploadDir(localPath, uploadTarget, (err3) => {
+            ssh.end();
+            if (err3) {
+              vscode.window.showErrorMessage(t('uploadError', { error: err3.message }));
+            } else {
+              vscode.window.showInformationMessage(t('uploadSuccess'));
+              treeDataProvider.refresh();
+            }
+          });
+        } else {
+          uploadFile(localPath, targetPath + '/' + pathMod.basename(localPath), (err2) => {
+            ssh.end();
+            if (err2) {
+              vscode.window.showErrorMessage(t('uploadError', { error: err2.message }));
+            } else {
+              vscode.window.showInformationMessage(t('uploadSuccess'));
+              treeDataProvider.refresh();
+            }
+          });
+        }
+      });
+    }).on('error', (err: Error) => {
+      vscode.window.showErrorMessage(t('sshError', { error: err.message }));
+    }).connect(config);
+  }));
+
   context.subscriptions.push(vscode.commands.registerCommand('remotix.moreActions', async () => {
     const pick = await vscode.window.showQuickPick([
       { label: t('importSshConfig'), action: 'importSshConfig' },

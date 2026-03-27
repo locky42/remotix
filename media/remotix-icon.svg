@@ -1,4 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <circle cx="16" cy="16" r="14" fill="#4F8EF7"/>
-  <text x="16" y="21" font-size="14" text-anchor="middle" fill="#fff" font-family="Arial">R</text>
+  <defs>
+    <mask id="transfer-arrow" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32">
+      <rect width="32" height="32" fill="white" />
+      <path d="M16 11l5 5h-4v7h-2v-7H11l5-5z" fill="black" />
+    </mask>
+  </defs>
+
+  <path d="M25 11.5a7.5 7.5 0 0 0-14.73-2.18A5.5 5.5 0 0 0 7 20.5h18a6.5 6.5 0 0 0 0-13v4z" 
+        fill="currentColor" 
+        mask="url(#transfer-arrow)"/>
 </svg>
