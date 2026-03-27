@@ -482,7 +482,26 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.commands.registerCommand('remotix.openSshTerminal', async (item: vscode.TreeItem) => {
     const conn = treeDataProvider.getConnectionByLabel(item.label as string);
     if (!conn || conn.type !== 'ssh') return;
-    const sshCmd = `ssh${conn.port ? ' -p ' + conn.port : ''} ${conn.user}@${conn.host}`;
+    let sshCmd = `ssh${conn.port ? ' -p ' + conn.port : ''}`;
+    if (conn.authMethod === 'privateKey' && conn.authFile) {
+      sshCmd += ` -i "${conn.authFile}"`;
+    }
+    sshCmd += ` ${conn.user}@${conn.host}`;
+    if (conn.authMethod === 'password' && conn.password) {
+      const { execSync } = require('child_process');
+      let sshpassExists = false;
+      try {
+        execSync('sshpass -V', { stdio: 'ignore' });
+        sshpassExists = true;
+      } catch {
+        sshpassExists = false;
+      }
+      if (sshpassExists) {
+        sshCmd = `sshpass -p '${conn.password.replace(/'/g, "'\\''")}' ` + sshCmd;
+      } else {
+        vscode.window.showInformationMessage(t('sshpassNotFound'));
+      }
+    }
     const terminal = vscode.window.createTerminal({ name: conn.label });
     terminal.sendText(sshCmd);
     terminal.show();
