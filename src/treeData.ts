@@ -4,6 +4,7 @@ import { ConnectionManager } from './core/ConnectionManager';
 import { TreeItemFactory } from './core/TreeItemFactory';
 // @ts-ignore
 import { SshService } from './core/SshService';
+import { FtpService } from './core/FtpService';
 import { DragAndDropController } from './utils/DragAndDropController';
 import { getGlobalConfig } from './config';
 
@@ -65,7 +66,7 @@ export class RemotixTreeDataProvider implements vscode.TreeDataProvider<vscode.T
       return [addItem, ...connectionItems];
     }
     
-    if (element && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'ssh-folder')) {
+    if (element && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'ssh-folder' || (element as any).contextValue === 'ftp-folder')) {
       const label = (element as any).connectionLabel || element.label;
       const conn = this.getConnectionByLabel(label);
       if (!conn) return [];
@@ -73,8 +74,10 @@ export class RemotixTreeDataProvider implements vscode.TreeDataProvider<vscode.T
         const sshPath = (element as any).sshPath || '.';
         return await this.getSshFiles(conn, sshPath, label);
       }
-      // FTP: TODO
-      return [this.itemFactory.createFtpNotImplementedItem()];
+      if (conn.type === 'ftp') {
+        const ftpPath = (element as any).ftpPath || '.';
+        return await FtpService.listDirectory(conn, ftpPath);
+      }
     }
     return [];
   }

@@ -6,6 +6,7 @@ import { ConnectionItem } from './types';
 import { RemotixTreeDataProvider } from './treeData';
 import { getGlobalConfig, saveGlobalConfig, getProjectConfig, saveProjectConfig } from './config';
 import { getAddConnectionHtml } from './ui/webview';
+import { FtpOps } from './core/FtpOps';
 // @ts-ignore
 import { ConnectConfig } from 'ssh2';
 
@@ -249,7 +250,12 @@ export function activate(context: vscode.ExtensionContext) {
     }
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.editFile', async (item: { label: string, sshPath: string, connectionLabel: string }) => {
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.editFile', async (item: { label: string, sshPath?: string, ftpPath?: string, connectionLabel: string }) => {
+        const filePath = item.ftpPath || item.sshPath;
+        if (!filePath) {
+          vscode.window.showErrorMessage(t('missingPathOrConnection'));
+          return;
+        }
     try {
       console.log('[remotix.editFile] Запуск для', item);
       const treeDataProvider = vscode.workspace.getConfiguration('remotix').get('treeDataProvider') as any || new RemotixTreeDataProvider(context);
@@ -259,15 +265,71 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       console.log('[remotix.editFile] Використовується підключення:', conn);
-      const { Client } = require('ssh2');
       const os = require('os');
-      const tmp = os.tmpdir();
       const pathMod = require('path');
+      const tmp = os.tmpdir();
       const safeHost = conn.host.replace(/[^\w]/g, '_');
-      const safeRelPath = item.sshPath.replace(/^\/+/, '').split('/').map((p: string) => p.replace(/[^\w.\-]/g, '_')).join(pathMod.sep);
+      const relPathRaw = item.sshPath || item.ftpPath || '';
+      const safeRelPath = relPathRaw.replace(/^\/+/, '').split('/').map((p) => p.replace(/[^\w.\-]/g, '_')).join(pathMod.sep);
       const tmpDir = pathMod.join(tmp, `remotix_${safeHost}`);
       fs.mkdirSync(pathMod.dirname(pathMod.join(tmpDir, safeRelPath)), { recursive: true });
       const tmpFile = pathMod.join(tmpDir, safeRelPath);
+
+      if (conn.type === 'ftp') {
+        // FTP: download file, open, upload on save
+        const { Client } = require('basic-ftp');
+        const client = new Client();
+        try {
+          await client.access({
+            host: conn.host,
+            port: conn.port ? Number(conn.port) : 21,
+            user: conn.user,
+            password: conn.password,
+            secure: true,
+            secureOptions: { rejectUnauthorized: false }
+          });
+          await client.downloadTo(tmpFile, item.ftpPath || item.sshPath);
+          await client.close();
+        } catch (e) {
+          await client.close();
+          vscode.window.showErrorMessage(t('fileDownloadError', { error: (e instanceof Error ? e.message : String(e)) }));
+          return;
+        }
+        const doc = await vscode.workspace.openTextDocument(tmpFile);
+        await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Active });
+        vscode.window.setStatusBarMessage(t('remoteFile', { user: conn.user, host: conn.host, path: item.ftpPath || item.sshPath || '' }), 5000);
+        const saveListener = vscode.workspace.onDidSaveTextDocument(async (savedDoc) => {
+          if (savedDoc.fileName === tmpFile) {
+            const client2 = new Client();
+            try {
+              await client2.access({
+                host: conn.host,
+                port: conn.port ? Number(conn.port) : 21,
+                user: conn.user,
+                password: conn.password,
+                secure: true,
+                secureOptions: { rejectUnauthorized: false }
+              });
+              await client2.uploadFrom(tmpFile, item.ftpPath || item.sshPath);
+              await client2.close();
+              vscode.window.setStatusBarMessage(t('fileSavedToServer'), 2000);
+            } catch (e) {
+              await client2.close();
+              vscode.window.showErrorMessage(t('fileUploadError', { error: (e instanceof Error ? e.message : String(e)) }));
+            }
+          }
+        });
+        const closeListener = vscode.workspace.onDidCloseTextDocument((closedDoc) => {
+          if (closedDoc.fileName === tmpFile) {
+            saveListener.dispose();
+            closeListener.dispose();
+            try { fs.unlinkSync(tmpFile); } catch {}
+          }
+        });
+        return;
+      }
+
+      const { Client } = require('ssh2');
       const ssh = new Client();
       const config: ConnectConfig = {
         host: conn.host || (conn.detail ? conn.detail.split('@')[1]?.split(':')[0] : ''),
@@ -294,7 +356,7 @@ export function activate(context: vscode.ExtensionContext) {
             return;
           }
           console.log('[remotix.editFile] SFTP готовий, качаємо файл', item.sshPath, '->', tmpFile);
-          sftp.fastGet(item.sshPath, tmpFile, {}, async (err: Error | null) => {
+          sftp.fastGet(item.sshPath || '', tmpFile, {}, async (err: Error | null) => {
             ssh.end();
             if (err) {
               vscode.window.showErrorMessage(t('fileDownloadError', { error: err.message }));
@@ -306,7 +368,7 @@ export function activate(context: vscode.ExtensionContext) {
               preview: false,
               viewColumn: vscode.ViewColumn.Active
             });
-            vscode.window.setStatusBarMessage(t('remoteFile', { user: conn.user, host: conn.host, path: item.sshPath }), 5000);
+            vscode.window.setStatusBarMessage(t('remoteFile', { user: conn.user, host: conn.host, path: item.sshPath || '' }), 5000);
             const saveListener = vscode.workspace.onDidSaveTextDocument(async (savedDoc) => {
               if (savedDoc.fileName === tmpFile) {
                 const ssh2 = new Client();
@@ -318,7 +380,7 @@ export function activate(context: vscode.ExtensionContext) {
                       return;
                     }
                     console.log('[remotix.editFile] Відвантажуємо назад', tmpFile, '->', item.sshPath);
-                    sftp2.fastPut(tmpFile, item.sshPath, {}, (err3: Error | null) => {
+                    sftp2.fastPut(tmpFile, item.sshPath || '', {}, (err3: Error | null) => {
                       ssh2.end();
                       if (err3) {
                         vscode.window.showErrorMessage(t('fileUploadError', { error: err3.message }));
@@ -518,7 +580,7 @@ export function activate(context: vscode.ExtensionContext) {
     }).connect(config);
   }));
   context.subscriptions.push(vscode.commands.registerCommand('remotix.createFolder', async (item: any) => {
-    const sshPath = item?.sshPath;
+    const sshPath = item?.sshPath || item?.ftpPath;
     const connectionLabel = item?.connectionLabel;
     if (!sshPath || !connectionLabel) {
       vscode.window.showErrorMessage(t('missingPathOrConnection'));
@@ -537,6 +599,15 @@ export function activate(context: vscode.ExtensionContext) {
       value: 'new-folder'
     });
     if (!newFolderName) return;
+    if (conn.type === 'ftp') {
+      const ok = await FtpOps.createFolder(conn, sshPath, newFolderName);
+      if (ok) {
+        vscode.window.showInformationMessage(t('folderCreated', { path: sshPath + '/' + newFolderName }));
+        treeDataProvider.refresh();
+      }
+      return;
+    }
+    
     const { Client } = require('ssh2');
     const ssh = new Client();
     const config: any = {
@@ -577,10 +648,14 @@ export function activate(context: vscode.ExtensionContext) {
     }).connect(config);
   }));
   context.subscriptions.push(vscode.commands.registerCommand('remotix.createFile', async (item: any) => {
-    const sshPath = item?.sshPath;
+    const sshPath = item?.sshPath || item?.ftpPath;
     const connectionLabel = item?.connectionLabel;
-    if (!sshPath || !connectionLabel) {
+    if (!connectionLabel) {
       vscode.window.showErrorMessage(t('missingPathOrConnection'));
+      return;
+    }
+    if (!sshPath) {
+      vscode.window.showErrorMessage('FTP: Не вказано шлях до папки для створення файлу.');
       return;
     }
     const treeDataProviderAny = treeDataProvider as any;
@@ -596,6 +671,15 @@ export function activate(context: vscode.ExtensionContext) {
       value: 'new-file.txt'
     });
     if (!newFileName) return;
+    if (conn.type === 'ftp') {
+      const ok = await FtpOps.createFile(conn, sshPath, newFileName);
+      if (ok) {
+        vscode.window.showInformationMessage(t('fileCreated', { path: sshPath + '/' + newFileName }));
+        treeDataProvider.refresh();
+      }
+      return;
+    }
+    
     let newFilePath: string;
     if (item?.contextValue === 'ssh-folder') {
       newFilePath = (sshPath.endsWith('/') ? sshPath : sshPath + '/') + newFileName;
@@ -626,7 +710,6 @@ export function activate(context: vscode.ExtensionContext) {
           ssh.end();
           return;
         }
-        
         const writeStream = sftp.createWriteStream(newFilePath, { flags: 'w', encoding: 'utf8' });
         writeStream.on('close', () => {
           ssh.end();
@@ -644,7 +727,7 @@ export function activate(context: vscode.ExtensionContext) {
     }).connect(config);
   }));
   context.subscriptions.push(vscode.commands.registerCommand('remotix.deleteFile', async (item: any) => {
-    const sshPath = item?.sshPath;
+    const sshPath = item?.sshPath || item?.ftpPath;
     const connectionLabel = item?.connectionLabel;
     if (!sshPath || !connectionLabel) {
       vscode.window.showErrorMessage(t('missingPathOrConnection'));
@@ -658,12 +741,32 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showErrorMessage(t('connectionNotFound'));
       return;
     }
+    const isDir = item.contextValue === 'ftp-folder' || item.contextValue === 'ssh-folder';
     const confirm = await vscode.window.showWarningMessage(
-      t(item.contextValue === 'ssh-folder' ? 'confirmDeleteFolder' : 'confirmDeleteFile', { path: sshPath }),
+      t(isDir ? 'confirmDeleteFolder' : 'confirmDeleteFile', { path: sshPath }),
       { modal: true },
       t('delete')
     );
     if (confirm !== t('delete')) return;
+
+    if (conn.type === 'ftp') {
+      let ok = false;
+      if (item.contextValue === 'ftp-folder') {
+        if (FtpOps.deleteFolderRecursive) {
+          ok = await FtpOps.deleteFolderRecursive(conn, sshPath);
+        } else {
+          ok = await FtpOps.deleteFileOrFolder(conn, sshPath, true);
+        }
+      } else {
+        ok = await FtpOps.deleteFileOrFolder(conn, sshPath, false);
+      }
+      if (ok) {
+        vscode.window.showInformationMessage(t(isDir ? 'folderDeleted' : 'fileDeleted', { path: sshPath }));
+        treeDataProvider.refresh();
+      }
+      return;
+    }
+
     const { Client } = require('ssh2');
     const ssh = new Client();
     const config: any = {

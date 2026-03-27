@@ -171,6 +171,31 @@
           "command": "remotix.deleteConnection",
           "when": "view == remotixView && viewItem == connection",
           "group": "4_modification@3"
+        },
+        {
+          "command": "remotix.createFile",
+          "when": "view == remotixView && (viewItem == ftp-folder || viewItem == ftp-file)",
+          "group": "0_create@1"
+        },
+        {
+          "command": "remotix.createFolder",
+          "when": "view == remotixView && (viewItem == ftp-folder || viewItem == ftp-file)",
+          "group": "0_create@2"
+        },
+        {
+          "command": "remotix.editFile",
+          "when": "view == remotixView && viewItem == ftp-file",
+          "group": "navigation"
+        },
+        {
+          "command": "remotix.rename",
+          "when": "view == remotixView && (viewItem == ftp-file || viewItem == ftp-folder)",
+          "group": "4_modification@1"
+        },
+        {
+          "command": "remotix.deleteFile",
+          "when": "view == remotixView && (viewItem == ftp-file || viewItem == ftp-folder)",
+          "group": "4_modification@2"
         }
       ]
     },
@@ -203,6 +228,7 @@
     "copy-ui": "mkdir -p ./out/ui && cp ./src/ui/*.html ./out/ui/"
   },
   "dependencies": {
+    "basic-ftp": "^5.2.0",
     "ssh2": "^1.17.0"
   },
   "devDependencies": {
