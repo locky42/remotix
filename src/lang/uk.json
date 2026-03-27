@@ -53,9 +53,7 @@
   "authFilePlaceholder": "Шлях до файлу",
   "delete": "Видалити",
   "confirmDeleteConnection": "Видалити підключення '{label}'?",
-  "connectionDeleted": "Підключення '{label}' видалено."
-}
-,
+  "connectionDeleted": "Підключення '{label}' видалено.",
   "extensionActivated": "Розширення активовано",
   "renameClicked": "Remotix: Натиснуто перейменування для {label}",
   "missingSshPathOrConnectionLabel": "Не вказано sshPath або connectionLabel",
@@ -75,3 +73,4 @@
   "folderDeleted": "Папку видалено: {path}",
   "deleteFileFailed": "Не вдалося видалити файл: {error}",
   "fileDeleted": "Файл видалено: {path}"
+}

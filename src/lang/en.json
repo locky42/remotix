@@ -53,9 +53,7 @@
   "authFilePlaceholder": "Path to file",
   "delete": "Delete",
   "confirmDeleteConnection": "Delete connection '{label}'?",
-  "connectionDeleted": "Connection '{label}' deleted."
-}
-,
+  "connectionDeleted": "Connection '{label}' deleted.",
   "extensionActivated": "Extension activated",
   "renameClicked": "Remotix: Rename clicked for {label}",
   "missingSshPathOrConnectionLabel": "Missing sshPath or connectionLabel",
@@ -75,3 +73,4 @@
   "folderDeleted": "Folder deleted: {path}",
   "deleteFileFailed": "Failed to delete file: {error}",
   "fileDeleted": "File deleted: {path}"
+}
