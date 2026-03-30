@@ -195,12 +195,25 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
     const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
+    const uploadType = await vscode.window.showQuickPick(
+        [
+            { label: '$(file) File', value: 'file' },
+            { label: '$(folder) Folder', value: 'folder' }
+        ], 
+        { placeHolder: t('selectUploadType') }
+    );
+
+    if (!uploadType) return;
+
+    const isFolder = uploadType.value === 'folder';
+
     const uris = await vscode.window.showOpenDialog({
-      canSelectFiles: true,
-      canSelectFolders: true,
-      canSelectMany: false,
-      openLabel: t('chooseFileOrFolderToUpload'),
-      defaultUri: vscode.Uri.file(homeDir)
+        canSelectFiles: !isFolder,
+        canSelectFolders: isFolder,
+        canSelectMany: true,
+        openLabel: t('select'),
+        defaultUri: vscode.Uri.file(homeDir),
+        filters: isFolder ? {} : { [t('allFiles')]: ['*'] }
     });
     if (!uris || uris.length === 0) return;
     const localPath = uris[0].fsPath;
@@ -937,7 +950,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
     const newFolderName = await vscode.window.showInputBox({
       prompt: t('enterNewFolderName'),
-      value: 'new-folder'
+      value: t('defaultNewFolderName')
     });
     if (!newFolderName) return;
     if (conn.type === 'ftp') {
@@ -996,7 +1009,7 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
     if (!sshPath) {
-      vscode.window.showErrorMessage('FTP: Не вказано шлях до папки для створення файлу.');
+      vscode.window.showErrorMessage(t('ftpNoFolderForFile'));
       return;
     }
     const treeDataProviderAny = treeDataProvider as any;
@@ -1009,7 +1022,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
     const newFileName = await vscode.window.showInputBox({
       prompt: t('enterNewFileName'),
-      value: 'new-file.txt'
+      value: t('defaultNewFileName')
     });
     if (!newFileName) return;
     if (conn.type === 'ftp') {
@@ -1186,7 +1199,7 @@ export function activate(context: vscode.ExtensionContext) {
   }));
   context.subscriptions.push(vscode.commands.registerCommand('remotix.showConfig', async () => {
     const config = getGlobalConfig(context);
-    vscode.window.showInformationMessage('Global config: ' + JSON.stringify(config));
+    vscode.window.showInformationMessage(t('globalConfigPrefix') + JSON.stringify(config));
   }));
 }
 

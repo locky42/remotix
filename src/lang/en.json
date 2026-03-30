@@ -1,4 +1,9 @@
 {
+  "allFiles": "All Files",
+  "defaultNewFolderName": "new-folder",
+  "defaultNewFileName": "new-file.txt",
+  "ftpNoFolderForFile": "FTP: No folder path specified for file creation.",
+  "globalConfigPrefix": "Global config: ",
   "importSshConfig": "Import from ssh config",
   "importFileZilla": "Import from FileZilla",
   "chooseAction": "Choose action",

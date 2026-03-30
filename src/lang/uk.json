@@ -1,4 +1,9 @@
 {
+  "allFiles": "Всі файли",
+  "defaultNewFolderName": "нова-папка",
+  "defaultNewFileName": "новий-файл.txt",
+  "ftpNoFolderForFile": "FTP: Не вказано шлях до папки для створення файлу.",
+  "globalConfigPrefix": "Глобальна конфігурація: ",
   "importSshConfig": "Імпортувати з ssh config",
   "importFileZilla": "Імпортувати з FileZilla",
   "chooseAction": "Оберіть дію",
