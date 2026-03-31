@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
 import { ConnectionItem } from '../types';
-import { t } from '../lang';
+import { LangService } from '../services/LangService';
 
 export class TreeItemFactory {
   createAddConnectionItem(): vscode.TreeItem {
-    const addItem = new vscode.TreeItem(t('addConnection'), vscode.TreeItemCollapsibleState.None);
+    const addItem = new vscode.TreeItem(LangService.t('addConnection'), vscode.TreeItemCollapsibleState.None);
     addItem.command = {
       command: 'remotix.addConnection',
-      title: t('addConnection')
+      title: LangService.t('addConnection')
     };
     addItem.iconPath = new vscode.ThemeIcon('add');
     return addItem;
@@ -18,10 +18,10 @@ export class TreeItemFactory {
     let desc = '';
     if (conn.type === 'ssh') {
       desc = `${conn.user || ''}@${conn.detail || ''}:${conn.port || ''}`;
-      item.tooltip = `${t('editConnection')}: ${conn.user || ''}@${conn.detail || ''}:${conn.port || ''}\n${t('openSshTerminal')}`;
+      item.tooltip = `${LangService.t('editConnection')}: ${conn.user || ''}@${conn.detail || ''}:${conn.port || ''}\n${LangService.t('openSshTerminal')}`;
     } else {
       desc = `${conn.user || ''}@${conn.detail || ''}:${conn.port || ''}`;
-      item.tooltip = `${t('editConnection')}: ${conn.user || ''}@${conn.detail || ''}:${conn.port || ''}`;
+      item.tooltip = `${LangService.t('editConnection')}: ${conn.user || ''}@${conn.detail || ''}:${conn.port || ''}`;
     }
     item.description = desc;
     item.iconPath = conn.type === 'ssh'
@@ -34,6 +34,6 @@ export class TreeItemFactory {
   }
 
   createFtpNotImplementedItem(): vscode.TreeItem {
-    return new vscode.TreeItem(t('ftpNotImplemented'));
+    return new vscode.TreeItem(LangService.t('ftpNotImplemented'));
   }
 }

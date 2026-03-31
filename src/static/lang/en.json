@@ -1,4 +1,10 @@
 {
+  "uploadWithDialogsNotImplemented": "uploadWithDialogs not implemented for this service",
+  "editFileWithDialogsNotImplemented": "editFileWithDialogs not implemented for this service",
+  "renameWithDialogsNotImplemented": "renameWithDialogs not implemented for this service",
+  "createFolderWithDialogsNotImplemented": "createFolderWithDialogs not implemented for this service",
+  "createFileWithDialogsNotImplemented": "createFileWithDialogs not implemented for this service",
+  "deleteFileWithDialogsNotImplemented": "deleteFileWithDialogs not implemented for this service",
   "allFiles": "All Files",
   "defaultNewFolderName": "new-folder",
   "defaultNewFileName": "new-file.txt",
@@ -26,6 +32,9 @@
   "fileDownloadError": "Failed to download file: {error}",
   "download": "Download",
   "downloadSuccess": "Download completed successfully!",
+  "uploadSuccess": "Upload completed successfully!",
+  "moveSuccess": "Move completed successfully!",
+  "moveError": "Failed to move: {error}",
   "downloadError": "Failed to download: {error}",
   "chooseDownloadTarget": "Choose download target folder",
   "sftpError": "SFTP error: {error}",
@@ -81,5 +90,7 @@
   "deleteFolderFailed": "Failed to delete folder: {error}",
   "folderDeleted": "Folder deleted: {path}",
   "deleteFileFailed": "Failed to delete file: {error}",
-  "fileDeleted": "File deleted: {path}"
+  "fileDeleted": "File deleted: {path}",
+  "openFile": "Open file",
+  "select": "Select"
 }

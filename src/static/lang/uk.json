@@ -1,8 +1,14 @@
 {
+  "uploadWithDialogsNotImplemented": "Завантаження через діалогові вікна ще не реалізовано",
+  "editFileWithDialogsNotImplemented": "Редагування через діалогові вікна ще не реалізовано",
   "allFiles": "Всі файли",
+  "renameWithDialogsNotImplemented": "Перейменування через діалогові вікна ще не реалізовано",
   "defaultNewFolderName": "нова-папка",
+  "createFolderWithDialogsNotImplemented": "Створення папки через діалогові вікна ще не реалізовано",
   "defaultNewFileName": "новий-файл.txt",
+  "createFileWithDialogsNotImplemented": "Створення файлу через діалогові вікна ще не реалізовано",
   "ftpNoFolderForFile": "FTP: Не вказано шлях до папки для створення файлу.",
+  "deleteFileWithDialogsNotImplemented": "Видалення файлу через діалогові вікна ще не реалізовано",
   "globalConfigPrefix": "Глобальна конфігурація: ",
   "importSshConfig": "Імпортувати з ssh config",
   "importFileZilla": "Імпортувати з FileZilla",
@@ -26,6 +32,9 @@
   "fileDownloadError": "Не вдалося завантажити файл: {error}",
   "download": "Завантажити",
   "downloadSuccess": "Завантаження завершено успішно!",
+  "uploadSuccess": "Завантаження завершено успішно!",
+  "moveSuccess": "Переміщення завершено успішно!",
+  "moveError": "Не вдалося перемістити: {error}",
   "downloadError": "Не вдалося завантажити: {error}",
   "chooseDownloadTarget": "Оберіть папку для завантаження",
   "sftpError": "SFTP помилка: {error}",
@@ -81,5 +90,7 @@
   "deleteFolderFailed": "Не вдалося видалити папку: {error}",
   "folderDeleted": "Папку видалено: {path}",
   "deleteFileFailed": "Не вдалося видалити файл: {error}",
-  "fileDeleted": "Файл видалено: {path}"
+  "fileDeleted": "Файл видалено: {path}",
+  "openFile": "Відкрити файл",
+  "select": "Вибрати"
 }

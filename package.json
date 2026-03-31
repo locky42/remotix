@@ -2,7 +2,7 @@
   "name": "remotix-extension",
   "displayName": "Remotix Extension",
   "description": "FTP and SSH client extension for Visual Studio Code",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "locky42",
   "repository": {
     "type": "git",
@@ -98,7 +98,7 @@
       },
       {
         "command": "remotix.moreActions",
-        "title": "More Actions..."
+        "title": "..."
       },
       {
         "command": "remotix.createFile",
@@ -238,14 +238,13 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile && npm run copy-ui && npm run copy-lang",
+    "vscode:prepublish": "npm run compile && npm run copy-static",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
-    "copy-ui": "mkdir -p ./out/ui && cp ./src/ui/*.html ./out/ui/",
-    "copy-lang": "mkdir -p ./out/lang && cp ./src/lang/*.json ./out/lang/"
+    "copy-static": "rm -rf ./out/static && mkdir -p ./out/static && cp -rf ./src/static/* ./out/static/"
   },
   "dependencies": {
     "basic-ftp": "^5.2.0",
