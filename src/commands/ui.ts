@@ -25,7 +25,11 @@ export function registerUiCommands() {
         }
     }));
 
-    context.subscriptions.push(vscode.commands.registerCommand('remotix.refresh', async () => {
+    context.subscriptions.push(vscode.commands.registerCommand('remotix.refresh', async (item?: vscode.TreeItem) => {
+        if (item) {
+            treeDataProvider.refresh(item);
+            return;
+        }
         treeDataProvider.refresh();
     }));
 

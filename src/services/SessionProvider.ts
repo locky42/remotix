@@ -82,6 +82,10 @@ export class SessionProvider {
     this.sessions[key] = session;
   }
 
+  static hasSession(key: string): boolean {
+    return key in this.sessions;
+  }
+
   static closeSession(key: string) {
     const session = this.sessions[key];
     if (session) {

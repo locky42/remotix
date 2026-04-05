@@ -28,7 +28,8 @@
     "onCommand:remotix.importFileZilla",
     "onCommand:remotix.deleteConnection",
     "onCommand:remotix.createFile",
-    "onCommand:remotix.createFolder"
+    "onCommand:remotix.createFolder",
+    "onCommand:remotix.refresh"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -103,6 +104,11 @@
         "command": "remotix.createFolder",
         "title": "Create Folder",
         "icon": "$(new-folder)"
+      },
+      {
+        "command": "remotix.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -121,6 +127,12 @@
       ],
       "view/item/context": [
         {
+          "command": "remotix.refresh",
+          "when": "view == remotixView && (viewItem == ssh-folder || viewItem == ftp-folder || viewItem == connection || viewItem == connection-active)",
+          "group": "inline",
+          "icon": "$(refresh)"
+        },
+        {
           "command": "remotix.createFile",
           "when": "view == remotixView && (viewItem == ssh-folder || viewItem == ssh-file)",
           "group": "0_create@1"
@@ -137,12 +149,12 @@
         },
         {
           "command": "remotix.openSshTerminal",
-          "when": "view == remotixView && (viewItem == connection || viewItem == ssh-folder)",
+          "when": "view == remotixView && (viewItem == connection || viewItem == connection-active)",
           "group": "navigation"
         },
         {
           "command": "remotix.editConnection",
-          "when": "view == remotixView && viewItem == connection",
+          "when": "view == remotixView && (viewItem == connection || viewItem == connection-active)",
           "group": "1_connection"
         },
         {
@@ -177,7 +189,7 @@
         },
         {
           "command": "remotix.deleteConnection",
-          "when": "view == remotixView && viewItem == connection",
+          "when": "view == remotixView && (viewItem == connection || viewItem == connection-active)",
           "group": "4_modification@3"
         },
         {
@@ -221,6 +233,7 @@
         {
           "id": "remotixView",
           "name": "Remotix Panel",
+          "icon": "media/remotix-icon.svg",
           "dragAndDropController": true
         }
       ]

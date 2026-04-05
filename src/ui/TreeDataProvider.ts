@@ -6,6 +6,7 @@ import { TreeItemFactory } from '../factories/TreeItemFactory';
 import { DragAndDropController } from './DragAndDropController';
 import { ConnectionManager } from '../services/ConnectionManager';
 import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
+import { SessionProvider } from '../services/SessionProvider';
 
 export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.TreeDragAndDropController<vscode.TreeItem> {
   private remoteServiceCache: Record<string, any> = {};
@@ -69,8 +70,9 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
       (treeItem as any).connectionLabel = element.connectionLabel;
     }
 
-    if (element.contextValue === 'connection') {
-      treeItem.contextValue = 'connection';
+    if (element.contextValue === 'connection' || element.contextValue === 'connection-active') {
+      const label = (element as any).connectionLabel || String(element.label);
+      treeItem.contextValue = SessionProvider.hasSession(label) ? 'connection-active' : 'connection';
     }
 
     return treeItem;
@@ -143,7 +145,7 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
       LoggerService.log('------------------------------');
       return [addItem, ...connectionItems];
     }
-    if (element && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'ssh-folder' || (element as any).contextValue === 'ftp-folder')) {
+    if (element && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active' || (element as any).contextValue === 'ssh-folder' || (element as any).contextValue === 'ftp-folder')) {
       const label = (element as any).connectionLabel || element.label;
       LoggerService.log(`[TreeDataProvider][DEBUG] label: ${label}`);
       const connection = this.getConnectionByLabel(label);
