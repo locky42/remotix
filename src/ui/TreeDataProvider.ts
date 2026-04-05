@@ -148,6 +148,12 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
     if (element && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active' || (element as any).contextValue === 'ssh-folder' || (element as any).contextValue === 'ftp-folder')) {
       const label = (element as any).connectionLabel || element.label;
       LoggerService.log(`[TreeDataProvider][DEBUG] label: ${label}`);
+      if (SessionProvider.isManuallyClosed(String(label))) {
+        LoggerService.log(`[TreeDataProvider][DEBUG] Connection ${label} was manually closed, returning [] without reconnect`);
+        LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (manually closed)');
+        LoggerService.log('------------------------------');
+        return [];
+      }
       const connection = this.getConnectionByLabel(label);
       LoggerService.log(`[TreeDataProvider][DEBUG] connection: ${JSON.stringify(connection, null, 2)}`);
       if (!connection) {

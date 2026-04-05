@@ -3,6 +3,7 @@ import { Container } from '../services/Container';
 import { LangService } from '../services/LangService';
 import { ConfigService } from '../services/ConfigService';
 import { TreeDataProvider } from '../ui/TreeDataProvider';
+import { SessionProvider } from '../services/SessionProvider';
 
 export function registerUiCommands() {
     const context = Container.get('extensionContext') as vscode.ExtensionContext;
@@ -27,6 +28,10 @@ export function registerUiCommands() {
 
     context.subscriptions.push(vscode.commands.registerCommand('remotix.refresh', async (item?: vscode.TreeItem) => {
         if (item) {
+            const label = (item as any).connectionLabel || (typeof item.label === 'string' ? item.label : undefined);
+            if (label && (((item as any).contextValue === 'connection') || ((item as any).contextValue === 'connection-active'))) {
+                SessionProvider.clearManualClose(String(label));
+            }
             treeDataProvider.refresh(item);
             return;
         }

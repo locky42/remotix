@@ -6,6 +6,7 @@ export type RemoteSession = SshClient | FtpClient;
 
 export class SessionProvider {
   private static sessions: Record<string, RemoteSession> = {};
+  private static manuallyClosed: Set<string> = new Set();
 
   static async checkConnection(key: string): Promise<boolean> {
     const session = this.sessions[key];
@@ -79,6 +80,7 @@ export class SessionProvider {
   }
 
   static setSession(key: string, session: RemoteSession) {
+    this.manuallyClosed.delete(key);
     this.sessions[key] = session;
   }
 
@@ -86,7 +88,18 @@ export class SessionProvider {
     return key in this.sessions;
   }
 
-  static closeSession(key: string) {
+  static isManuallyClosed(key: string): boolean {
+    return this.manuallyClosed.has(key);
+  }
+
+  static clearManualClose(key: string) {
+    this.manuallyClosed.delete(key);
+  }
+
+  static closeSession(key: string, manual: boolean = false) {
+    if (manual) {
+      this.manuallyClosed.add(key);
+    }
     const session = this.sessions[key];
     if (session) {
       try {

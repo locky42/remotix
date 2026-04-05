@@ -6,6 +6,8 @@ import { getAddConnectionHtml } from '../ui/webview';
 import { LangService } from '../services/LangService';
 import { ConfigService } from '../services/ConfigService';
 import { TreeDataProvider } from '../ui/TreeDataProvider';
+import { SessionProvider } from '../services/SessionProvider';
+import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
 
 export function registerConnectionCommands(saveConnection: Function) {
   const context = Container.get('extensionContext') as vscode.ExtensionContext;
@@ -301,5 +303,18 @@ export function registerConnectionCommands(saveConnection: Function) {
     }
     treeDataProvider.removeConnection(label);
     vscode.window.showInformationMessage(LangService.t('connectionDeleted', { label }));
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.closeConnection', async (item: vscode.TreeItem) => {
+    const label = (item as any).connectionLabel || String(item.label);
+    if (!label) {
+      return;
+    }
+
+    SessionProvider.closeSession(label, true);
+    const remoteServiceProvider = Container.get('remoteServiceProvider') as RemoteServiceProvider;
+    remoteServiceProvider?.clearCache?.(label);
+    treeDataProvider.refresh();
+    vscode.window.showInformationMessage(LangService.t('connectionClosed', { label }));
   }));
 }
