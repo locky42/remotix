@@ -16,17 +16,18 @@ export function registerUiCommands() {
     context.subscriptions.push(vscode.commands.registerCommand('remotix.moreActions', async () => {
         const pick = await vscode.window.showQuickPick([
         { label: LangService.t('importSshConfig'), action: 'importSshConfig' },
-        { label: LangService.t('importFileZilla'), action: 'importFileZilla' },
-        { label: LangService.t('setLanguage'), action: 'setLanguage' }
+        { label: LangService.t('importFileZilla'), action: 'importFileZilla' }
         ], { placeHolder: LangService.t('chooseAction') });
         if (!pick) return;
         if (pick.action === 'importSshConfig') {
         await vscode.commands.executeCommand('remotix.importSshConfig');
         } else if (pick.action === 'importFileZilla') {
         await vscode.commands.executeCommand('remotix.importFileZilla');
-        } else if (pick.action === 'setLanguage') {
-        await vscode.commands.executeCommand('remotix.setLanguage');
         }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('remotix.openSettings', async () => {
+        await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:locky42.remotix-extension');
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('remotix.setLanguage', async () => {

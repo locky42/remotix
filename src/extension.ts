@@ -19,6 +19,23 @@ function resolveLangFromSettings(): 'en' | 'uk' {
   return uiLang.startsWith('uk') ? 'uk' : 'en';
 }
 
+async function migrateLegacyLanguageSetting(): Promise<void> {
+  const config = vscode.workspace.getConfiguration('remotix');
+  const configured = config.get<string>('language', 'auto');
+  const normalized = String(configured || '').trim().toLowerCase();
+
+  let migrated: 'auto' | 'en' | 'uk' | undefined;
+  if (normalized === 'ukrainian' || normalized === 'ua' || normalized === 'uk-ua') {
+    migrated = 'uk';
+  } else if (normalized === 'english' || normalized === 'en-us' || normalized === 'en-gb') {
+    migrated = 'en';
+  }
+
+  if (migrated && migrated !== configured) {
+    await config.update('language', migrated, vscode.ConfigurationTarget.Global);
+  }
+}
+
 function saveConnection(connection: ConnectionItem, global: boolean) {
   if (global) {
     const config = ConfigService.getGlobalConfig();
@@ -32,7 +49,11 @@ function saveConnection(connection: ConnectionItem, global: boolean) {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  LangService.setLang(resolveLangFromSettings());
+  migrateLegacyLanguageSetting()
+    .catch(() => {})
+    .finally(() => {
+      LangService.setLang(resolveLangFromSettings());
+    });
 
   Container.set('extensionContext', context);
   Container.set('connectionManager', new ConnectionManager());

@@ -118,18 +118,20 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
   async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
     const { LoggerService } = await import('../services/LoggerService');
-    if (this.treeLocker.isLocked()) {
-        LoggerService.log('[TreeDataProvider][DEBUG] Tree is LOCKED. Skipping getChildren to prevent session collision.');
-        return [];
-    }
+    const elementAny = element as any;
+    const elementPath = elementAny?.sshPath || elementAny?.ftpPath || '.';
     LoggerService.show();
     LoggerService.log('------------------------------');
     LoggerService.log('[TreeDataProvider][DEBUG] getChildren ENTRY');
-    LoggerService.log(`[TreeDataProvider][DEBUG] element: ${element ? JSON.stringify(element, null, 2) : 'undefined'}`);
-    if (this.treeLocker.isLocked()) {
-      const { LoggerService } = await import('../services/LoggerService');
-      LoggerService.log('[TreeDataProvider][DEBUG] Tree is locked, returning []');
-      return [];
+    LoggerService.log(`[TreeDataProvider][DEBUG] element: ${element ? `label=${String(elementAny?.label || '')}, context=${String(elementAny?.contextValue || '')}, path=${String(elementPath)}` : 'undefined'}`);
+    const elementLabel = element ? String((element as any).connectionLabel || (element as any).label || '') : undefined;
+    if (this.treeLocker.isLockedFor(elementLabel)) {
+      if (element) {
+        this.treeLocker.notifyBlockedActivity();
+        LoggerService.log(`[TreeDataProvider][DEBUG] Tree is locked for current connection (${elementLabel}), returning []`);
+        return [];
+      }
+      LoggerService.log('[TreeDataProvider][DEBUG] Tree is locked, but root remains available for connection management');
     }
     if (!element) {
       LoggerService.log('[TreeDataProvider][DEBUG] No element, returning root items');
@@ -140,7 +142,8 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
         this.elementIndex.set(this.buildElementKey(conn.label, 'connection', '.'), item);
         return item;
       });
-      LoggerService.log(`[TreeDataProvider][DEBUG] connectionItems: ${JSON.stringify(connectionItems.map(i => i.label))}`);
+      const labels = connectionItems.map(i => String(i.label));
+      LoggerService.log(`[TreeDataProvider][DEBUG] connectionItems: count=${labels.length}, preview=[${labels.slice(0, 5).join(', ')}${labels.length > 5 ? ', ...' : ''}]`);
       LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (root)');
       LoggerService.log('------------------------------');
       return [addItem, ...connectionItems];
@@ -155,7 +158,7 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
         return [];
       }
       const connection = this.getConnectionByLabel(label);
-      LoggerService.log(`[TreeDataProvider][DEBUG] connection: ${JSON.stringify(connection, null, 2)}`);
+      LoggerService.log(`[TreeDataProvider][DEBUG] connection: ${connection ? `type=${connection.type}, host=${connection.host}, port=${connection.port}, user=${connection.user}` : 'undefined'}`);
       if (!connection) {
         LoggerService.log('[TreeDataProvider][DEBUG] No connection found, returning []');
         LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (no conn)');

@@ -29,6 +29,7 @@
     "onCommand:remotix.deleteConnection",
     "onCommand:remotix.closeConnection",
     "onCommand:remotix.setLanguage",
+    "onCommand:remotix.openSettings",
     "onCommand:remotix.createFile",
     "onCommand:remotix.createFolder",
     "onCommand:remotix.refresh"
@@ -104,6 +105,11 @@
         "icon": "$(globe)"
       },
       {
+        "command": "remotix.openSettings",
+        "title": "%command.openSettings%",
+        "icon": "$(settings-gear)"
+      },
+      {
         "command": "remotix.moreActions",
         "title": "..."
       },
@@ -131,9 +137,15 @@
           "group": "navigation@1"
         },
         {
-          "command": "remotix.moreActions",
+          "command": "remotix.openSettings",
           "when": "view == remotixView",
           "group": "navigation@2",
+          "icon": "$(settings-gear)"
+        },
+        {
+          "command": "remotix.moreActions",
+          "when": "view == remotixView",
+          "group": "navigation@3",
           "icon": "$(ellipsis)"
         }
       ],
@@ -248,17 +260,50 @@
         "remotix.language": {
           "type": "string",
           "default": "auto",
+          "order": 1,
           "enum": [
             "auto",
             "en",
             "uk"
           ],
-          "enumDescriptions": [
-            "%config.language.enum.auto%",
-            "%config.language.enum.en%",
-            "%config.language.enum.uk%"
+          "enumItemLabels": [
+            "%config.language.item.auto%",
+            "%config.language.item.en%",
+            "%config.language.item.uk%"
           ],
           "description": "%config.language.description%"
+        },
+        "remotix.ftpUploadConcurrency": {
+          "type": "number",
+          "default": 3,
+          "order": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "%config.ftpUploadConcurrency.description%"
+        },
+        "remotix.ftpDownloadConcurrency": {
+          "type": "number",
+          "default": 3,
+          "order": 2,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "%config.ftpDownloadConcurrency.description%"
+        },
+        "remotix.sshUploadConcurrency": {
+          "type": "number",
+          "default": 3,
+          "order": 5,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "%config.sshUploadConcurrency.description%"
+        },
+        "remotix.sshDownloadConcurrency": {
+          "type": "number",
+          "default": 4,
+          "order": 4,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "%config.sshDownloadConcurrency.description%"
         }
       }
     },

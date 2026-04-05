@@ -12,12 +12,10 @@ export function createRemoteService(connection: ConnectionItem): RemoteService {
   const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
   const treeDataProviderAny = treeDataProvider as any;
   const allConnections = treeDataProviderAny.connectionManager?.getAll?.() || [];
-  const available = allConnections.map((c: any) => c.label) || [];
-  LoggerService.logObject('[createRemoteService] Item', connection);
-  LoggerService.log(`[createRemoteService] Available labels: [${available.join(', ')}]`);
-  LoggerService.log(`[createRemoteService] All connections: ${JSON.stringify(allConnections, null, 2)}`);
+  LoggerService.log(`[createRemoteService] Request: label=${connection.label}, type=${connection.type}, host=${connection.host}, port=${connection.port}`);
+  LoggerService.log(`[createRemoteService] Available connections count: ${allConnections.length}`);
   const client = treeDataProviderAny.getConnectionByLabel(connection.label);
-  LoggerService.log(`[createRemoteService] Found connection: ${JSON.stringify(connection, null, 2)}`);
+  LoggerService.log(`[createRemoteService] Found by label: ${client ? 'yes' : 'no'}`);
   if (!client) {
     if (typeof vscode !== 'undefined') {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));

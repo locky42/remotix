@@ -42,6 +42,18 @@ export class SshRemoteService implements RemoteService {
     treeDataProvider.refreshRemoteFolder(this.connection.label, this.normalizeRemotePath(folderPath), 'ssh');
   }
 
+  private getUploadConcurrencyLimit(): number {
+    const configured = vscode.workspace.getConfiguration('remotix').get<number>('sshUploadConcurrency', 3);
+    const value = Number.isFinite(configured as number) ? Number(configured) : 3;
+    return Math.max(1, Math.min(10, Math.floor(value)));
+  }
+
+  private getDownloadConcurrencyLimit(): number {
+    const configured = vscode.workspace.getConfiguration('remotix').get<number>('sshDownloadConcurrency', 4);
+    const value = Number.isFinite(configured as number) ? Number(configured) : 4;
+    return Math.max(1, Math.min(10, Math.floor(value)));
+  }
+
   public connect(): Promise<SshClient> {
     return new Promise((resolve, reject) => {
       const sshClient = new SshClient();
@@ -246,7 +258,7 @@ export class SshRemoteService implements RemoteService {
         if (err) return reject(err);
 
         let downloadedFiles = 0;
-        const CONCURRENCY_LIMIT = 4;
+        const CONCURRENCY_LIMIT = this.getDownloadConcurrencyLimit();
 
         const readdirAsync = (dir: string): Promise<any[]> =>
           new Promise((res, rej) => sftp.readdir(dir, (e, list) => (e ? rej(e) : res(list || []))));
@@ -343,8 +355,10 @@ export class SshRemoteService implements RemoteService {
   async uploadWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
     const targetPath = item?.sshPath || item?.ftpPath;
+    LoggerService.log(`[SSH][UPLOAD] START dialog target=${targetPath || 'unknown'}`);
     if (!targetPath) {
       vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
+      LoggerService.log('[SSH][UPLOAD] END fail: missing target path');
       return;
     }
     const treeDataProviderAny = treeDataProvider as any;
@@ -353,6 +367,7 @@ export class SshRemoteService implements RemoteService {
       : undefined;
     if (!conn) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
+      LoggerService.log('[SSH][UPLOAD] END fail: connection not found');
       return;
     }
     
@@ -377,13 +392,16 @@ export class SshRemoteService implements RemoteService {
         defaultUri: vscode.Uri.file(homeDir)
     });
 
-    if (!uris || uris.length === 0) return;
+    if (!uris || uris.length === 0) {
+      LoggerService.log('[SSH][UPLOAD] END canceled: no selection');
+      return;
+    }
     const pathMod = require('path');
     const fs = require('fs');
     let anyError = false;
 
     try {
-      treeDataProvider.treeLocker.lock('[DEBUG] Tree locked for upload sequence');
+      treeDataProvider.treeLocker.lock(LangService.t('uploadInProgress'), this.connection.label);
       LoggerService.log('[DEBUG] Tree locked for upload sequence');
 
       for (const uri of uris) {
@@ -404,6 +422,9 @@ export class SshRemoteService implements RemoteService {
       }
       if (!anyError) {
         vscode.window.showInformationMessage(LangService.t('uploadSuccess'));
+        LoggerService.log(`[SSH][UPLOAD] END success target=${targetPath}`);
+      } else {
+        LoggerService.log(`[SSH][UPLOAD] END fail target=${targetPath}`);
       }
     } finally {
       treeDataProvider.treeLocker.unlock();
@@ -420,13 +441,13 @@ export class SshRemoteService implements RemoteService {
 
       return new Promise<void>((resolve, reject) => {
           const executeUpload = (sftpClient: any) => {
-              LoggerService.log(`[SFTP] Starting put: ${remotePath}`);
+          LoggerService.log(`[SSH][UPLOAD FILE] START: ${localPath} -> ${remotePath}`);
               sftpClient.fastPut(localPath, remotePath, (err: Error | undefined) => {
                   if (err) {
-                      LoggerService.log(`[SFTP ERROR] ${err.message}`);
+              LoggerService.log(`[SSH][UPLOAD FILE] END fail: ${remotePath} error=${err.message}`);
                       return reject(err);
                   }
-                  LoggerService.log(`[SFTP SUCCESS] ${remotePath}`);
+            LoggerService.log(`[SSH][UPLOAD FILE] END success: ${remotePath}`);
                   resolve();
               });
           };
@@ -446,8 +467,9 @@ export class SshRemoteService implements RemoteService {
       const pathMod = require('path');
       const fsPromises = require('fs').promises;
       const normalizedRemote = remoteDir.replace(/\\/g, '/');
+      const visitedRealDirs = new Set<string>();
 
-      LoggerService.log(`[DEBUG 1] Початок uploadDir для: ${normalizedRemote}`);
+      LoggerService.log(`[SSH][UPLOAD DIR] START: ${localDir} -> ${normalizedRemote}`);
 
       try {
           const session = await SessionProvider.getSession<any>(this.connection.label, this);
@@ -463,27 +485,65 @@ export class SshRemoteService implements RemoteService {
           await this.createFolder(normalizedRemote);
           LoggerService.log(`[DEBUG 4.SUCCESS] Етап створення папки пройдено`);
 
-          const entries = await fsPromises.readdir(localDir, { withFileTypes: true });
-          LoggerService.log(`[DEBUG 5] Файлів до завантаження: ${entries.length}`);
+          const collectableEntries = await fsPromises.readdir(localDir, { withFileTypes: true });
+          const entries = [] as any[];
+          for (const entry of collectableEntries) {
+            const src = pathMod.join(localDir, entry.name);
+            if (entry.isSymbolicLink && entry.isSymbolicLink()) {
+              LoggerService.log(`[SSH][UPLOAD DIR][SKIP] Symbolic link: ${src}`);
+              continue;
+            }
+            entries.push(entry);
+          }
 
-          for (const entry of entries) {
+          const realDir = await fsPromises.realpath(localDir).catch(() => localDir);
+          if (visitedRealDirs.has(realDir)) {
+            LoggerService.log(`[SSH][UPLOAD DIR][SKIP] Already visited local dir (cycle guard): ${localDir}`);
+            return;
+          }
+          visitedRealDirs.add(realDir);
+
+          LoggerService.log(`[SSH][UPLOAD DIR] BATCH entries=${entries.length} dir=${normalizedRemote}`);
+
+          const dirs = entries.filter((entry: any) => entry.isDirectory());
+          const files = entries.filter((entry: any) => !entry.isDirectory());
+
+          for (const entry of dirs) {
               const src = pathMod.join(localDir, entry.name);
               const dest = `${normalizedRemote}/${entry.name}`;
               
-              if (entry.isDirectory()) {
-                  await this.uploadDir(src, dest, sftp);
-              } else {
-                  LoggerService.log(`[DEBUG 6] Uploading: ${entry.name}`);
-                  await this.upload(src, dest, sftp);
-              }
+              await this.uploadDir(src, dest, sftp);
           }
 
+          const CONCURRENCY_LIMIT = this.getUploadConcurrencyLimit();
+          const queue = [...files];
+          const worker = async (): Promise<void> => {
+            while (queue.length > 0) {
+              const entry = queue.shift();
+              if (!entry) {
+                continue;
+              }
+              const src = pathMod.join(localDir, entry.name);
+              const dest = `${normalizedRemote}/${entry.name}`;
+              LoggerService.log(`[SSH][UPLOAD DIR][FILE] START: ${src} -> ${dest}`);
+              await this.upload(src, dest, sftp);
+              LoggerService.log(`[SSH][UPLOAD DIR][FILE] END: ${dest}`);
+            }
+          };
+
+          const workerCount = Math.min(CONCURRENCY_LIMIT, queue.length);
+          if (workerCount > 0) {
+            await Promise.all(Array(workerCount).fill(null).map(() => worker()));
+          }
+
+                LoggerService.log(`[SSH][UPLOAD DIR] END success: ${normalizedRemote}`);
+
       } catch (err: any) {
-          LoggerService.log(`[FATAL ERROR] ${err.message}`);
+                LoggerService.log(`[SSH][UPLOAD DIR] END fail: ${normalizedRemote} error=${err.message}`);
           throw err;
       } finally {
           if (!existingSftp) {
-              LoggerService.log(`[DEBUG 7] Процес завершено`);
+                  LoggerService.log('[SSH][UPLOAD DIR] root operation finished');
           }
       }
   }
@@ -623,6 +683,8 @@ export class SshRemoteService implements RemoteService {
       LangService.t('delete')
     );
     if (confirm !== LangService.t('delete')) return;
+    LoggerService.log(`[SSH][DELETE] START type=${isDir ? 'directory' : 'file'} path=${sshPath}`);
+    treeDataProvider?.treeLocker?.lock(LangService.t('deleteInProgress'), this.connection.label);
     try {
       if (isDir) {
         await this.deleteDir(sshPath);
@@ -632,8 +694,12 @@ export class SshRemoteService implements RemoteService {
         vscode.window.showInformationMessage(LangService.t('fileDeleted', { path: sshPath }));
       }
       this.refreshFolder(treeDataProvider, this.getParentRemotePath(sshPath));
+      LoggerService.log(`[SSH][DELETE] END success type=${isDir ? 'directory' : 'file'} path=${sshPath}`);
     } catch (e: any) {
+      LoggerService.log(`[SSH][DELETE] END fail type=${isDir ? 'directory' : 'file'} path=${sshPath} error=${e instanceof Error ? e.message : String(e)}`);
       vscode.window.showErrorMessage(LangService.t('deleteFailed', { error: (e instanceof Error ? e.message : String(e)) }));
+    } finally {
+      treeDataProvider?.treeLocker?.unlock();
     }
   }
 
@@ -647,16 +713,16 @@ export class SshRemoteService implements RemoteService {
           return reject(err);
         }
 
-        LoggerService.log(`[SshRemoteService] Deleting file: ${remotePath}`);
+        LoggerService.log(`[SSH][DELETE FILE] START: ${remotePath}`);
 
         sftp.unlink(remotePath, (err2: any) => {
           if (err2) {
-            LoggerService.log(`[SshRemoteService] unlink error: ${err2.message}`);
+            LoggerService.log(`[SSH][DELETE FILE] END fail: ${remotePath} error=${err2.message}`);
             sftp.end();
             return reject(err2);
           }
           
-          LoggerService.log(`[SshRemoteService] File deleted successfully`);
+          LoggerService.log(`[SSH][DELETE FILE] END success: ${remotePath}`);
           sftp.end();
           resolve();
         });
@@ -665,7 +731,7 @@ export class SshRemoteService implements RemoteService {
   }
 
   async deleteDir(remoteDir: string): Promise<void> {
-    LoggerService.log(`[SshRemoteService][deleteDir] ENTRY: remoteDir=${remoteDir}`);
+    LoggerService.log(`[SSH][DELETE DIR] START: ${remoteDir}`);
     
     const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
     
@@ -676,14 +742,14 @@ export class SshRemoteService implements RemoteService {
     return new Promise<void>((resolve, reject) => {
       session.sftp((err, sftp) => {
         if (err) {
-          LoggerService.log(`[SshRemoteService][deleteDir] SFTP Error: ${err.message}`);
+          LoggerService.log(`[SSH][DELETE DIR] SFTP error: ${err.message}`);
           return reject(err);
         }
 
         const rmRecursive = (dirPath: string, done: (err?: Error | null) => void) => {
           sftp.readdir(dirPath, (err2, list) => {
             if (err2) {
-              LoggerService.log(`[SshRemoteService][deleteDir] readdir error for ${dirPath}: ${err2.message}`);
+              LoggerService.log(`[SSH][DELETE DIR] readdir fail: ${dirPath} error=${err2.message}`);
               return done(err2);
             }
 
@@ -692,7 +758,7 @@ export class SshRemoteService implements RemoteService {
               if (i >= list.length) {
                 sftp.rmdir(dirPath, (errRm) => {
                   if (errRm) {
-                    LoggerService.log(`[SshRemoteService][deleteDir] rmdir error for ${dirPath}: ${errRm.message}`);
+                    LoggerService.log(`[SSH][DELETE DIR] rmdir fail: ${dirPath} error=${errRm.message}`);
                   }
                   return done(errRm);
                 });
@@ -717,7 +783,7 @@ export class SshRemoteService implements RemoteService {
               } else {
                 sftp.unlink(entryPath, (err3) => {
                   if (err3) {
-                    LoggerService.log(`[SshRemoteService][deleteDir] unlink error for ${entryPath}: ${err3.message}`);
+                    LoggerService.log(`[SSH][DELETE DIR] unlink fail: ${entryPath} error=${err3.message}`);
                     return done(err3);
                   }
                   next();
@@ -732,10 +798,10 @@ export class SshRemoteService implements RemoteService {
         rmRecursive(remoteDir, (finalErr) => {
           sftp.end();
           if (finalErr) {
-            LoggerService.log(`[SshRemoteService][deleteDir] FINAL error: ${finalErr.message}`);
+            LoggerService.log(`[SSH][DELETE DIR] END fail: ${remoteDir} error=${finalErr.message}`);
             reject(finalErr);
           } else {
-            LoggerService.log(`[SshRemoteService][deleteDir] Successfully deleted: ${remoteDir}`);
+            LoggerService.log(`[SSH][DELETE DIR] END success: ${remoteDir}`);
             resolve();
           }
         });
