@@ -1,30 +1,56 @@
-# Remotix VS Code Extension
+# Remotix
 
-Remotix is a Visual Studio Code extension for managing SSH and FTP connections directly from the VS Code sidebar. It allows you to import connections from your SSH config or FileZilla, store them globally, and quickly connect, browse, and edit remote files.
+Remotix is a VS Code sidebar extension for working with remote servers over SSH and FTP without leaving the editor. You can manage connections, browse remote files, upload and download folders, edit files directly from VS Code, and open an SSH terminal from the same panel.
 
 ## Features
-- Tree view of all your SSH/FTP connections
-- Import connections from SSH config and FileZilla
-- Add, edit, and remove connections via a webview form
-- Store connections globally or per project
-- Browse and edit remote files over SSH (FTP coming soon)
-- Open SSH terminal for any connection
-- Multilanguage support (English, Ukrainian)
 
-## Commands
-- **Remotix: More Actions** — Import connections from SSH config or FileZilla
-- **Remotix: Add Connection** — Add a new SSH/FTP connection
-- **Remotix: Edit Connection** — Edit an existing connection
-- **Remotix: Open SSH Terminal** — Open a terminal for the selected SSH connection
+- Manage SSH and FTP connections from a single sidebar view
+- Import saved hosts from SSH config and FileZilla
+- Add, edit, delete, refresh, and close connections
+- Browse remote directories and files in a tree view
+- Create files and folders on remote servers
+- Rename and delete remote files and folders
+- Upload files or whole folders to SSH and FTP targets
+- Download files or whole folders from SSH and FTP targets
+- Edit remote files directly in VS Code
+- Open an SSH terminal for SSH connections
+- Use English or Ukrainian UI language
+- Tune transfer concurrency in settings
 
-## Usage
-1. Open the Remotix panel in the VS Code sidebar.
-2. Use the plus button or context menu to add or import connections.
-3. Click a connection to browse remote files or open a terminal.
-4. Edit or remove connections as needed.
+## How To Use
 
-## Localization
-Remotix supports English (default) and Ukrainian. Language is auto-detected or can be set in the extension settings.
+1. Open the Remotix view from the Activity Bar.
+2. Click `Add Connection` or use `More Actions` to import existing hosts.
+3. Expand a connection to browse remote files and folders.
+4. Use the context menu or inline actions to upload, download, edit, rename, create, refresh, or delete items.
+5. For SSH connections, open a terminal directly from the same tree item.
+
+## Settings
+
+Remotix currently exposes these settings:
+
+- `remotix.language`: UI language selection (`auto`, `en`, `uk`)
+- `remotix.ftpDownloadConcurrency`: concurrent FTP download workers
+- `remotix.ftpUploadConcurrency`: concurrent FTP upload workers
+- `remotix.sshDownloadConcurrency`: concurrent SSH download workers
+- `remotix.sshUploadConcurrency`: concurrent SSH upload workers
+
+## Screenshots
+
+Current screenshots from `media/screenshots`:
+
+![Panel overview](media/screenshots/panel-overview.png)
+
+Connection list and Remotix panel entry point.
+
+![Context menu actions](media/screenshots/context-menu.png)
+
+File and folder actions from the tree context menu.
+
+![Remote file in editor](media/screenshots/edit-file.png)
+
+Remote file opened directly in VS Code.
 
 ## License
+
 MIT

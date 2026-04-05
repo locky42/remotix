@@ -2,17 +2,29 @@
   "name": "remotix-extension",
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "publisher": "locky42",
   "repository": {
     "type": "git",
     "url": "https://github.com/locky42/remotix.git"
   },
+  "homepage": "https://github.com/locky42/remotix#readme",
+  "bugs": {
+    "url": "https://github.com/locky42/remotix/issues"
+  },
+  "icon": "media/remotix-icon.png",
   "engines": {
     "vscode": ">=1.70.0"
   },
   "categories": [
     "Other"
+  ],
+  "keywords": [
+    "ftp",
+    "ssh",
+    "sftp",
+    "remote",
+    "file-manager"
   ],
   "activationEvents": [
     "onCommand:remotix.moreActions",
