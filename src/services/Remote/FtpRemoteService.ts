@@ -64,6 +64,27 @@ export class FtpRemoteService implements RemoteService {
     treeDataProvider.refreshRemoteFolder(this.connection.label, this.normalizeRemotePath(folderPath), 'ftp');
   }
 
+  private async createDownloadWorkerClient(): Promise<FtpClient> {
+    const client = new FtpClient();
+    await client.access({
+      host: this.connection.host,
+      port: this.connection.port ? Number(this.connection.port) : 21,
+      user: this.connection.user,
+      password: this.connection.password,
+      secure: true,
+      secureOptions: { rejectUnauthorized: false }
+    });
+
+    if (this.initialPath && this.initialPath !== '.') {
+      try {
+        await client.cd(this.initialPath);
+      } catch {
+      }
+    }
+
+    return client;
+  }
+
   public connect(): Promise<FtpClient> {
     return new Promise(async (resolve, reject) => {
       const ftpClient = new FtpClient();
@@ -183,6 +204,8 @@ export class FtpRemoteService implements RemoteService {
 
   async downloadWithDialogs(item: any): Promise<void> {
     const isDirectory = item?.contextValue === 'ssh-folder' || item?.contextValue === 'ftp-folder';
+    const selectedPath = item?.ftpPath || item?.sshPath || item?.item?.name || 'unknown';
+    LoggerService.log(`[FTP][DOWNLOAD] START dialog type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`);
     const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
     const uri = await vscode.window.showOpenDialog({
       canSelectFolders: true,
@@ -199,7 +222,9 @@ export class FtpRemoteService implements RemoteService {
         await this.download(item, localTarget);
       }
       vscode.window.showInformationMessage(LangService.t('downloadSuccess'));
+      LoggerService.log(`[FTP][DOWNLOAD] END success type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`);
     } catch (err: any) {
+      LoggerService.log(`[FTP][DOWNLOAD] END fail type=${isDirectory ? 'directory' : 'file'} path=${selectedPath} error=${err?.message || String(err)}`);
       vscode.window.showErrorMessage(LangService.t('downloadError', { error: err.message }));
     }
   }
@@ -219,13 +244,13 @@ export class FtpRemoteService implements RemoteService {
       throw new Error('FTP session not initialized or connection closed');
     }
 
-    LoggerService.log(`[FTP] Downloading: ${remotePath} -> ${localDest}`);
+    LoggerService.log(`[FTP][DOWNLOAD FILE] START: ${remotePath} -> ${localDest}`);
 
     try {
       await session.downloadTo(localDest, remotePath);
-      LoggerService.log(`[FTP] Download successful: ${localDest}`);
+      LoggerService.log(`[FTP][DOWNLOAD FILE] END success: ${localDest}`);
     } catch (err: any) {
-      LoggerService.log(`[FTP][ERROR] Download failed: ${err.message}`);
+      LoggerService.log(`[FTP][DOWNLOAD FILE] END fail: ${remotePath} error=${err.message}`);
       throw err;
     }
   }
@@ -242,29 +267,68 @@ export class FtpRemoteService implements RemoteService {
       const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
       if (!session || (session as any).closed) throw new Error('FTP session not initialized');
 
-      LoggerService.log(`[FTP] downloadDir START: ${remoteDir}`);
+      LoggerService.log(`[FTP][DOWNLOAD DIR] START: ${remoteDir} -> ${localDest}`);
+      try {
+        const filesToDownload: Array<{ remotePath: string; localPath: string }> = [];
+        const collectFiles = async (rDir: string, lDir: string): Promise<void> => {
+          await fs.promises.mkdir(lDir, { recursive: true });
+          const list = await session.list(rDir);
+          const entries = list.filter((entry: any) => entry.name !== '.' && entry.name !== '..');
 
-      const list = await session.list(remoteDir);
-      const items = list.filter(entry => entry.name !== '.' && entry.name !== '..');
-      
-      let downloadedCount = 0;
+          for (const entry of entries) {
+            const remotePath = rDir.endsWith('/') ? rDir + entry.name : rDir + '/' + entry.name;
+            const localPath = pathMod.join(lDir, entry.name);
+            if (entry.type === 2) {
+              await collectFiles(remotePath, localPath);
+            } else if (entry.type === 1) {
+              filesToDownload.push({ remotePath, localPath });
+            }
+          }
+        };
 
-      for (const entry of items) {
-        const remotePath = remoteDir.endsWith('/') ? remoteDir + entry.name : remoteDir + '/' + entry.name;
-        const localPath = pathMod.join(localDest, entry.name);
+        await collectFiles(remoteDir, localDest);
+        LoggerService.log(`[FTP][DOWNLOAD DIR] QUEUE built: ${filesToDownload.length} files`);
 
-        if (entry.type === 2) { // Directory (Type 2)
-          await this._internalDownloadDir(session, remotePath, localPath);
-        } else if (entry.type === 1) { // File (Type 1)
-          LoggerService.log(`[FTP] Downloading file: ${remotePath}`);
-          await session.downloadTo(localPath, remotePath);
-          
-          downloadedCount++;
-          vscode.window.setStatusBarMessage(`Remotix: Downloaded ${downloadedCount}/${items.length} items`, 2000);
+        const CONCURRENCY_LIMIT = 3;
+        const queue = [...filesToDownload];
+        let downloadedCount = 0;
+
+        const workers: FtpClient[] = await Promise.all(
+          Array(Math.min(CONCURRENCY_LIMIT, queue.length))
+            .fill(null)
+            .map(() => this.createDownloadWorkerClient())
+        );
+
+        try {
+          const workerRun = async (worker: FtpClient): Promise<void> => {
+            while (queue.length > 0) {
+              const job = queue.shift();
+              if (!job) {
+                continue;
+              }
+              LoggerService.log(`[FTP][DOWNLOAD DIR][FILE] START: ${job.remotePath}`);
+              await worker.downloadTo(job.localPath, job.remotePath);
+              downloadedCount++;
+              LoggerService.log(`[FTP][DOWNLOAD DIR][FILE] END: ${job.remotePath}`);
+              vscode.window.setStatusBarMessage(`Remotix: Downloaded ${downloadedCount}/${filesToDownload.length} items`, 2000);
+            }
+          };
+
+          await Promise.all(workers.map((worker) => workerRun(worker)));
+        } finally {
+          for (const worker of workers) {
+            try {
+              worker.close();
+            } catch {
+            }
+          }
         }
-      }
 
-      LoggerService.log(`[FTP] downloadDir complete: ${remoteDir}`);
+        LoggerService.log(`[FTP][DOWNLOAD DIR] END success: ${remoteDir}`);
+      } catch (err: any) {
+        LoggerService.log(`[FTP][DOWNLOAD DIR] END fail: ${remoteDir} error=${err?.message || String(err)}`);
+        throw err;
+      }
     });
   }
 
@@ -782,26 +846,6 @@ export class FtpRemoteService implements RemoteService {
         vscode.window.showInformationMessage('Items moved successfully');
       }
     });
-  }
-
-  private async _internalDownloadDir(session: FtpClient, remoteDir: string, localDest: string): Promise<void> {
-    const fs = require('fs');
-    const pathMod = require('path');
-    
-    await fs.promises.mkdir(localDest, { recursive: true });
-    const list = await session.list(remoteDir);
-    const items = list.filter(entry => entry.name !== '.' && entry.name !== '..');
-
-    for (const entry of items) {
-      const remotePath = remoteDir.endsWith('/') ? remoteDir + entry.name : remoteDir + '/' + entry.name;
-      const localPath = pathMod.join(localDest, entry.name);
-
-      if (entry.type === 2) {
-        await this._internalDownloadDir(session, remotePath, localPath);
-      } else {
-        await session.downloadTo(localPath, remotePath);
-      }
-    }
   }
 
   private async _recursiveDelete(session: FtpClient, targetPath: string): Promise<void> {

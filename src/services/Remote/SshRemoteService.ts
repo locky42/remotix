@@ -158,6 +158,8 @@ export class SshRemoteService implements RemoteService {
   async downloadWithDialogs(item: any): Promise<void> {
     LoggerService.log(`[SshRemoteService][DEBUG] downloadWithDialogs ENTRY: item=${JSON.stringify(item)}, contextValue=${item?.contextValue}`);
     const isDirectory = item?.contextValue === 'ssh-folder' || item?.contextValue === 'ftp-folder';
+    const selectedPath = item?.sshPath || item?.ftpPath || 'unknown';
+    LoggerService.log(`[SSH][DOWNLOAD] START dialog type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`);
     LoggerService.log(`[SshRemoteService][DEBUG] downloadWithDialogs isDirectory=${isDirectory}`);
   
     const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
@@ -176,7 +178,9 @@ export class SshRemoteService implements RemoteService {
         await this.download(item, localTarget);
       }
       vscode.window.showInformationMessage(LangService.t('downloadSuccess'));
+        LoggerService.log(`[SSH][DOWNLOAD] END success type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`);
     } catch (err: any) {
+        LoggerService.log(`[SSH][DOWNLOAD] END fail type=${isDirectory ? 'directory' : 'file'} path=${selectedPath} error=${err?.message || String(err)}`);
       vscode.window.showErrorMessage(LangService.t('downloadError', { error: err.message }));
     }
   }
@@ -197,7 +201,7 @@ export class SshRemoteService implements RemoteService {
           return reject(err);
         }
 
-        LoggerService.log(`[SshRemoteService] Downloading via stream: ${remotePath} -> ${localDest}`);
+        LoggerService.log(`[SSH][DOWNLOAD FILE] START: ${remotePath} -> ${localDest}`);
 
         const writeStream = fs.createWriteStream(localDest);
         const readStream = sftp.createReadStream(remotePath);
@@ -215,7 +219,7 @@ export class SshRemoteService implements RemoteService {
         });
 
         writeStream.on('close', () => {
-          LoggerService.log(`[SshRemoteService] Download complete: ${localDest}`);
+          LoggerService.log(`[SSH][DOWNLOAD FILE] END success: ${localDest}`);
           sftp.end();
           resolve();
         });
@@ -226,7 +230,7 @@ export class SshRemoteService implements RemoteService {
   }
 
   async downloadDir(item: any, localTarget: string): Promise<void> {
-    LoggerService.log(`[SshRemoteService] downloadDir ENTRY: path=${item?.sshPath}, localTarget=${localTarget}`);
+    LoggerService.log(`[SSH][DOWNLOAD DIR] START: path=${item?.sshPath || item?.ftpPath}, localTarget=${localTarget}`);
 
     const remoteDir = item?.ftpPath || item?.sshPath;
     if (!remoteDir) throw new Error('Remote path is missing');
@@ -242,80 +246,95 @@ export class SshRemoteService implements RemoteService {
         if (err) return reject(err);
 
         let downloadedFiles = 0;
-        const recursiveDownload = (rDir: string, lDir: string, cb: (err?: Error | null) => void) => {
-          sftp.readdir(rDir, (readErr, list) => {
-            if (readErr) return cb(readErr);
-            if (!fs.existsSync(lDir)) {
-              fs.mkdirSync(lDir, { recursive: true });
-            }
+        const CONCURRENCY_LIMIT = 4;
 
-            let i = 0;
-            const next = (): void => {
-              if (i >= list.length) {
-                return cb();
+        const readdirAsync = (dir: string): Promise<any[]> =>
+          new Promise((res, rej) => sftp.readdir(dir, (e, list) => (e ? rej(e) : res(list || []))));
+
+        const downloadFile = (entryRemotePath: string, entryLocalPath: string, entryName: string, fileSize: number): Promise<void> => {
+          return new Promise<void>((res, rej) => {
+            LoggerService.log(`[SSH][DOWNLOAD DIR][FILE] START: ${entryRemotePath}`);
+            let received = 0;
+            const readStream = sftp.createReadStream(entryRemotePath);
+            const writeStream = fs.createWriteStream(entryLocalPath);
+
+            readStream.on('data', (chunk: Buffer) => {
+              received += chunk.length;
+              if (fileSize > 0) {
+                const percent = Math.round((received / fileSize) * 100);
+                vscode_.window.setStatusBarMessage(`Remotix: ${entryName} [${percent}%]`, 1000);
               }
+            });
 
-              const entry = list[i++];
-              if (entry.filename === '.' || entry.filename === '..') {
-                return next();
-              }
-
-              const entryRemotePath = rDir.endsWith('/') ? rDir + entry.filename : rDir + '/' + entry.filename;
-              const entryLocalPath = pathMod.join(lDir, entry.filename);
-
-              if (entry.attrs.isDirectory()) {
-                recursiveDownload(entryRemotePath, entryLocalPath, (err2) => {
-                  if (err2) return cb(err2);
-                  next();
-                });
-              } else {
-                const fileSize = entry.attrs.size || 0;
-                let received = 0;
-
-                const readStream = sftp.createReadStream(entryRemotePath);
-                const writeStream = fs.createWriteStream(entryLocalPath);
-
-                readStream.on('data', (chunk: Buffer) => {
-                  received += chunk.length;
-                  if (fileSize > 0) {
-                    const percent = Math.round((received / fileSize) * 100);
-                    vscode_.window.setStatusBarMessage(`Remotix: ${entry.filename} [${percent}%]`, 1000);
-                  }
-                });
-
-                const handleError = (e: Error) => {
-                  readStream.destroy();
-                  writeStream.destroy();
-                  cb(e);
-                };
-
-                readStream.on('error', handleError);
-                writeStream.on('error', handleError);
-
-                writeStream.on('finish', () => {
-                  downloadedFiles++;
-                  vscode_.window.setStatusBarMessage(`Remotix: Завантажено ${downloadedFiles} файлів`, 2000);
-                  next();
-                });
-
-                readStream.pipe(writeStream);
-              }
+            const handleError = (e: Error) => {
+              readStream.destroy();
+              writeStream.destroy();
+              LoggerService.log(`[SSH][DOWNLOAD DIR][FILE] END fail: ${entryRemotePath} error=${e.message}`);
+              rej(e);
             };
 
-            next();
+            readStream.on('error', handleError);
+            writeStream.on('error', handleError);
+
+            writeStream.on('finish', () => {
+              downloadedFiles++;
+              LoggerService.log(`[SSH][DOWNLOAD DIR][FILE] END: ${entryRemotePath}`);
+              vscode_.window.setStatusBarMessage(`Remotix: Завантажено ${downloadedFiles} файлів`, 2000);
+              res();
+            });
+
+            readStream.pipe(writeStream);
           });
         };
 
-        recursiveDownload(remoteDir, localDest, (finalErr) => {
-          sftp.end();
-          if (finalErr) {
-            LoggerService.log(`[SshRemoteService] Recursive download error: ${finalErr.message}`);
-            reject(finalErr);
-          } else {
-            vscode_.window.setStatusBarMessage('Remotix: Завантаження папки завершено', 5000);
-            resolve();
+        const recursiveDownload = async (rDir: string, lDir: string): Promise<void> => {
+          if (!fs.existsSync(lDir)) {
+            fs.mkdirSync(lDir, { recursive: true });
           }
-        });
+
+          const list = await readdirAsync(rDir);
+          const entries = list.filter((entry: any) => entry.filename !== '.' && entry.filename !== '..');
+          const dirs = entries.filter((entry: any) => entry.attrs?.isDirectory?.());
+          const files = entries.filter((entry: any) => !entry.attrs?.isDirectory?.());
+          LoggerService.log(`[SSH][DOWNLOAD DIR] BATCH: dir=${rDir} dirs=${dirs.length} files=${files.length}`);
+
+          // Build folders first to keep structure predictable.
+          for (const entry of dirs) {
+            const entryRemotePath = rDir.endsWith('/') ? rDir + entry.filename : rDir + '/' + entry.filename;
+            const entryLocalPath = pathMod.join(lDir, entry.filename);
+            await recursiveDownload(entryRemotePath, entryLocalPath);
+          }
+
+          const queue = [...files];
+          const worker = async (): Promise<void> => {
+            while (queue.length > 0) {
+              const entry = queue.shift();
+              if (!entry) continue;
+              const entryRemotePath = rDir.endsWith('/') ? rDir + entry.filename : rDir + '/' + entry.filename;
+              const entryLocalPath = pathMod.join(lDir, entry.filename);
+              const fileSize = entry.attrs?.size || 0;
+              await downloadFile(entryRemotePath, entryLocalPath, entry.filename, fileSize);
+            }
+          };
+
+          const workerCount = Math.min(CONCURRENCY_LIMIT, queue.length);
+          if (workerCount > 0) {
+            await Promise.all(Array(workerCount).fill(null).map(() => worker()));
+          }
+        };
+
+        recursiveDownload(remoteDir, localDest)
+          .then(() => {
+            sftp.end();
+            vscode_.window.setStatusBarMessage('Remotix: Завантаження папки завершено', 5000);
+            LoggerService.log(`[SSH][DOWNLOAD DIR] END success: ${remoteDir}`);
+            resolve();
+          })
+          .catch((finalErr: Error) => {
+            sftp.end();
+            LoggerService.log(`[SSH][DOWNLOAD DIR] END fail: ${remoteDir} error=${finalErr.message}`);
+            reject(finalErr);
+          });
       });
     });
   }
