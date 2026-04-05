@@ -10,6 +10,15 @@ import { Container } from './services/Container';
 import { ConnectionManager } from './services/ConnectionManager';
 import { RemoteServiceProvider } from './services/RemoteServiceProvider';
 
+function resolveLangFromSettings(): 'en' | 'uk' {
+  const configured = vscode.workspace.getConfiguration('remotix').get<string>('language', 'auto');
+  if (configured === 'en' || configured === 'uk') {
+    return configured;
+  }
+  const uiLang = vscode.env.language.toLowerCase();
+  return uiLang.startsWith('uk') ? 'uk' : 'en';
+}
+
 function saveConnection(connection: ConnectionItem, global: boolean) {
   if (global) {
     const config = ConfigService.getGlobalConfig();
@@ -23,6 +32,8 @@ function saveConnection(connection: ConnectionItem, global: boolean) {
 }
 
 export function activate(context: vscode.ExtensionContext) {
+  LangService.setLang(resolveLangFromSettings());
+
   Container.set('extensionContext', context);
   Container.set('connectionManager', new ConnectionManager());
   const remoteServiceProvider = new RemoteServiceProvider();
@@ -35,6 +46,13 @@ export function activate(context: vscode.ExtensionContext) {
     dragAndDropController: treeDataProvider
   });
   context.subscriptions.push(treeView);
+
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration('remotix.language')) {
+      LangService.setLang(resolveLangFromSettings());
+      treeDataProvider.refresh();
+    }
+  }));
 
   // Register file/folder operation commands in a separate module
   registerFileFolderCommands();

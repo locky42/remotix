@@ -1,7 +1,7 @@
 {
   "name": "remotix-extension",
-  "displayName": "Remotix Extension",
-  "description": "FTP and SSH client extension for Visual Studio Code",
+  "displayName": "%ext.displayName%",
+  "description": "%ext.description%",
   "version": "0.1.0",
   "publisher": "locky42",
   "repository": {
@@ -28,6 +28,7 @@
     "onCommand:remotix.importFileZilla",
     "onCommand:remotix.deleteConnection",
     "onCommand:remotix.closeConnection",
+    "onCommand:remotix.setLanguage",
     "onCommand:remotix.createFile",
     "onCommand:remotix.createFolder",
     "onCommand:remotix.refresh"
@@ -37,65 +38,70 @@
     "commands": [
       {
         "command": "remotix.addConnection",
-        "title": "Remotix: Add connection",
+        "title": "%command.addConnection%",
         "icon": "$(add)"
       },
       {
         "command": "remotix.editConnection",
-        "title": "Edit Connection",
+        "title": "%command.editConnection%",
         "icon": "$(edit)"
       },
       {
         "command": "remotix.deleteConnection",
-        "title": "Delete Connection",
+        "title": "%command.deleteConnection%",
         "icon": "$(trash)"
       },
       {
         "command": "remotix.closeConnection",
-        "title": "Close Connection",
+        "title": "%command.closeConnection%",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "remotix.openSshTerminal",
-        "title": "Open SSH Terminal",
+        "title": "%command.openSshTerminal%",
         "icon": "$(terminal)"
       },
       {
         "command": "remotix.editFile",
-        "title": "Edit File",
+        "title": "%command.editFile%",
         "icon": "$(edit)"
       },
       {
         "command": "remotix.upload",
-        "title": "Upload",
+        "title": "%command.upload%",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "remotix.download",
-        "title": "Download",
+        "title": "%command.download%",
         "icon": "$(cloud-download)"
       },
       {
         "command": "remotix.rename",
-        "title": "Rename",
+        "title": "%command.rename%",
         "icon": "$(edit)"
       },
       {
         "command": "remotix.deleteFile",
-        "title": "Delete",
+        "title": "%command.deleteFile%",
         "icon": "$(trash)"
       },
       {
         "command": "remotix.copyPath",
-        "title": "Copy Path"
+        "title": "%command.copyPath%"
       },
       {
         "command": "remotix.importSshConfig",
-        "title": "Remotix: Import from SSH config"
+        "title": "%command.importSshConfig%"
       },
       {
         "command": "remotix.importFileZilla",
-        "title": "Remotix: Import from FileZilla"
+        "title": "%command.importFileZilla%"
+      },
+      {
+        "command": "remotix.setLanguage",
+        "title": "%command.setLanguage%",
+        "icon": "$(globe)"
       },
       {
         "command": "remotix.moreActions",
@@ -103,17 +109,17 @@
       },
       {
         "command": "remotix.createFile",
-        "title": "Create File",
+        "title": "%command.createFile%",
         "icon": "$(new-file)"
       },
       {
         "command": "remotix.createFolder",
-        "title": "Create Folder",
+        "title": "%command.createFolder%",
         "icon": "$(new-folder)"
       },
       {
         "command": "remotix.refresh",
-        "title": "Refresh",
+        "title": "%command.refresh%",
         "icon": "$(refresh)"
       }
     ],
@@ -236,11 +242,31 @@
         }
       ]
     },
+    "configuration": {
+      "title": "%config.title%",
+      "properties": {
+        "remotix.language": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "en",
+            "uk"
+          ],
+          "enumDescriptions": [
+            "%config.language.enum.auto%",
+            "%config.language.enum.en%",
+            "%config.language.enum.uk%"
+          ],
+          "description": "%config.language.description%"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
           "id": "remotix-activitybar",
-          "title": "Remotix",
+          "title": "%view.container.title%",
           "icon": "media/remotix-icon.svg"
         }
       ]
@@ -249,7 +275,7 @@
       "remotix-activitybar": [
         {
           "id": "remotixView",
-          "name": "Remotix Panel",
+          "name": "%view.panel.name%",
           "icon": "media/remotix-icon.svg",
           "dragAndDropController": true
         }
