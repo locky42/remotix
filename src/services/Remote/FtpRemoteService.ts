@@ -40,6 +40,30 @@ export class FtpRemoteService implements RemoteService {
     LoggerService.log('[FTP] FtpRemoteService instance created.');
   }
 
+  private normalizeRemotePath(remotePath: string): string {
+    const normalized = (remotePath || '.').replace(/\\/g, '/').trim();
+    return normalized.length > 0 ? normalized : '.';
+  }
+
+  private getParentRemotePath(remotePath: string): string {
+    const normalized = this.normalizeRemotePath(remotePath).replace(/\/+$|\/+$/g, '');
+    if (!normalized || normalized === '.') {
+      return '.';
+    }
+    const lastSlash = normalized.lastIndexOf('/');
+    if (lastSlash < 0) {
+      return '.';
+    }
+    if (lastSlash === 0) {
+      return '/';
+    }
+    return normalized.slice(0, lastSlash);
+  }
+
+  private refreshFolder(treeDataProvider: TreeDataProvider, folderPath: string): void {
+    treeDataProvider.refreshRemoteFolder(this.connection.label, this.normalizeRemotePath(folderPath), 'ftp');
+  }
+
   public connect(): Promise<FtpClient> {
     return new Promise(async (resolve, reject) => {
       const ftpClient = new FtpClient();
@@ -305,7 +329,10 @@ export class FtpRemoteService implements RemoteService {
     if (!anyError) {
       vscode.window.showInformationMessage(LangService.t('uploadSuccess'));
     }
-    treeDataProvider.refresh();
+    const refreshPath = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder'
+      ? targetPath
+      : this.getParentRemotePath(targetPath);
+    this.refreshFolder(treeDataProvider, refreshPath);
   }
 
   async upload(localPath: string, remotePath: string): Promise<void> {
@@ -372,7 +399,10 @@ export class FtpRemoteService implements RemoteService {
     try {
       await this.createFile(newFilePath);
       vscode.window.showInformationMessage(LangService.t('fileCreated', { path: newFilePath }));
-      treeDataProvider.refresh();
+      const refreshPath = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder'
+        ? ftpPath
+        : this.getParentRemotePath(ftpPath);
+      this.refreshFolder(treeDataProvider, refreshPath);
     } catch (e: any) {
       vscode.window.showErrorMessage(LangService.t('createFileFailed', { error: (e instanceof Error ? e.message : String(e)) }));
     }
@@ -445,8 +475,11 @@ export class FtpRemoteService implements RemoteService {
         LoggerService.log('[FTP][createFolderWithDialogs] Clearing remoteServiceCache');
         treeDataProvider.clearRemoteServiceCache(this.connection.label);
       }
-      treeDataProvider.refresh();
-      LoggerService.log('[FTP][createFolderWithDialogs] treeDataProvider.refresh() called');
+      const refreshPath = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder'
+        ? ftpPath
+        : this.getParentRemotePath(ftpPath);
+      this.refreshFolder(treeDataProvider, refreshPath);
+      LoggerService.log('[FTP][createFolderWithDialogs] folder-level refresh called');
     } catch (e: any) {
       LoggerService.log(`[FTP][createFolderWithDialogs] ERROR: ${e instanceof Error ? e.message : String(e)}`);
       vscode.window.showErrorMessage(LangService.t('createFolderFailed', { error: (e instanceof Error ? e.message : String(e)) }));
@@ -510,7 +543,7 @@ export class FtpRemoteService implements RemoteService {
         await this.deleteFile(ftpPath);
         vscode.window.showInformationMessage(LangService.t('fileDeleted', { path: ftpPath }));
       }
-      treeDataProvider.refresh();
+      this.refreshFolder(treeDataProvider, this.getParentRemotePath(ftpPath));
     } catch (e: any) {
       vscode.window.showErrorMessage(LangService.t('deleteFailed', { error: (e instanceof Error ? e.message : String(e)) }));
     }
@@ -581,7 +614,12 @@ export class FtpRemoteService implements RemoteService {
     try {
       await this.rename(oldPath, newPath);
       vscode.window.showInformationMessage(LangService.t('renamedTo', { name: newName }));
-      treeDataProvider.refresh();
+      const oldParent = this.getParentRemotePath(oldPath);
+      const newParent = this.getParentRemotePath(newPath);
+      this.refreshFolder(treeDataProvider, oldParent);
+      if (newParent !== oldParent) {
+        this.refreshFolder(treeDataProvider, newParent);
+      }
     } catch (e: any) {
       vscode.window.showErrorMessage(LangService.t('renameFailed', { error: (e instanceof Error ? e.message : String(e)) }));
     }
@@ -737,7 +775,7 @@ export class FtpRemoteService implements RemoteService {
       }
 
       if (treeDataProvider?.refresh) {
-        treeDataProvider.refresh();
+        this.refreshFolder(treeDataProvider, targetFolder);
       }
       
       if (!hadError) {

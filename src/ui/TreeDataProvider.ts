@@ -9,9 +9,10 @@ import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
 
 export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.TreeDragAndDropController<vscode.TreeItem> {
   private remoteServiceCache: Record<string, any> = {};
-  private _onDidChangeTreeData: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
-  readonly onDidChangeTreeData: vscode.Event<void> = this._onDidChangeTreeData.event;
+  private _onDidChangeTreeData: vscode.EventEmitter<vscode.TreeItem | undefined> = new vscode.EventEmitter<vscode.TreeItem | undefined>();
+  readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined> = this._onDidChangeTreeData.event;
   private connectionManager: ConnectionManager;
+  private elementIndex: Map<string, vscode.TreeItem> = new Map();
 
   readonly dragAndDropController: DragAndDropController;
   private itemFactory: TreeItemFactory;
@@ -20,10 +21,10 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
   constructor() {
     this.connectionManager = Container.get('connectionManager') as ConnectionManager;
-    this.connectionManager.setOnChange(() => this._onDidChangeTreeData.fire());
+    this.connectionManager.setOnChange(() => this._onDidChangeTreeData.fire(undefined));
     this.itemFactory = new TreeItemFactory();
     // Pass the TreeDataProvider itself to DragAndDropController
-    this.dragAndDropController = new DragAndDropController(this.connectionManager, () => this._onDidChangeTreeData.fire(), this);
+    this.dragAndDropController = new DragAndDropController(this.connectionManager, () => this._onDidChangeTreeData.fire(undefined), this);
     this.treeLocker = new TreeViewLocker();
   }
 
@@ -83,8 +84,34 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
     return this.connectionManager.getByLabel(label);
   }
 
-  refresh() {
-    this._onDidChangeTreeData.fire();
+  private normalizeRemotePath(remotePath?: string): string {
+    if (!remotePath) {
+      return '.';
+    }
+    const normalized = remotePath.replace(/\\/g, '/').trim();
+    if (!normalized || normalized === './') {
+      return '.';
+    }
+    return normalized;
+  }
+
+  private buildElementKey(connectionLabel: string, contextValue: string, remotePath?: string): string {
+    return `${connectionLabel}::${contextValue}::${this.normalizeRemotePath(remotePath)}`;
+  }
+
+  public refreshRemoteFolder(connectionLabel: string, remotePath: string, protocol: 'ssh' | 'ftp' = 'ssh'): void {
+    const contextValue = protocol === 'ssh' ? 'ssh-folder' : 'ftp-folder';
+    const key = this.buildElementKey(connectionLabel, contextValue, remotePath);
+    const element = this.elementIndex.get(key);
+    if (element) {
+      this._onDidChangeTreeData.fire(element);
+      return;
+    }
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  refresh(element?: vscode.TreeItem) {
+    this._onDidChangeTreeData.fire(element);
   }
 
   async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
@@ -105,7 +132,12 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
     if (!element) {
       LoggerService.log('[TreeDataProvider][DEBUG] No element, returning root items');
       const addItem = this.itemFactory.createAddConnectionItem();
-      const connectionItems = this.connectionManager.getAll().map(conn => this.itemFactory.createConnectionTreeItem(conn));
+      const connectionItems = this.connectionManager.getAll().map(conn => {
+        const item = this.itemFactory.createConnectionTreeItem(conn);
+        (item as any).connectionLabel = conn.label;
+        this.elementIndex.set(this.buildElementKey(conn.label, 'connection', '.'), item);
+        return item;
+      });
       LoggerService.log(`[TreeDataProvider][DEBUG] connectionItems: ${JSON.stringify(connectionItems.map(i => i.label))}`);
       LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (root)');
       LoggerService.log('------------------------------');
@@ -142,6 +174,14 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
       if (typeof remoteService.listDirectory === 'function') {
         LoggerService.log('[TreeDataProvider][DEBUG] Calling remoteService.listDirectory...');
         const result = await remoteService.listDirectory(path, label);
+        result.forEach((child: vscode.TreeItem) => {
+          const childAny = child as any;
+          if (childAny?.contextValue === 'ssh-folder' || childAny?.contextValue === 'ftp-folder') {
+            const childLabel = childAny.connectionLabel || label;
+            const childPath = childAny.sshPath || childAny.ftpPath || '.';
+            this.elementIndex.set(this.buildElementKey(String(childLabel), String(childAny.contextValue), String(childPath)), child);
+          }
+        });
         LoggerService.log(`[TreeDataProvider][DEBUG] listDirectory returned ${Array.isArray(result) ? result.length : 'non-array'} items`);
         LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (listDirectory)');
         LoggerService.log('------------------------------');
