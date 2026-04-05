@@ -1,7 +1,7 @@
-import * as path from 'path';
 import * as fs from 'fs';
-import { LangService } from '../services/LangService';
+import * as path from 'path';
 import { ConnectionItem } from '../types';
+import { LangService } from '../services/LangService';
 
 export function getAddConnectionHtml(init?: Partial<ConnectionItem>): string {
     let htmlPath = path.join(__dirname, '../static/ui/addConnection.html');
@@ -43,7 +43,7 @@ export function getAddConnectionHtml(init?: Partial<ConnectionItem>): string {
     }
     html = html.replace(/\{\{HOST_VALUE\}\}/g, hostValue);
     // PORT
-    html = html.replace(/\{\{PORT_VALUE\}\}/g, init?.port || '22');
+    html = html.replace(/\{\{PORT_VALUE\}\}/g, String(init?.port ?? '22'));
     // USER
     let userValue = '';
     if (typeof init?.user === 'string') {

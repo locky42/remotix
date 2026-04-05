@@ -79,6 +79,7 @@
   "renameFailed": "Не вдалося перейменувати: {error}",
   "renamedTo": "Перейменовано на {name}",
   "missingPathOrConnection": "Не вказано шлях або підключення",
+  "uploadError": "Не вдалося відправити: {error}",
   "enterNewFolderName": "Введіть назву нової папки",
   "createFolderFailed": "Не вдалося створити папку: {error}",
   "folderCreated": "Папку створено: {path}",

@@ -1,14 +1,81 @@
 import { Client as SshClient } from 'ssh2';
 import { Client as FtpClient } from 'basic-ftp';
+import { LoggerService } from './LoggerService';
 
-// Тип для сесії: може бути SSH або FTP
 export type RemoteSession = SshClient | FtpClient;
 
 export class SessionProvider {
   private static sessions: Record<string, RemoteSession> = {};
 
-  static getSession<T extends RemoteSession>(key: string): T | undefined {
-    return this.sessions[key] as T | undefined;
+  static async checkConnection(key: string): Promise<boolean> {
+    const session = this.sessions[key];
+    if (!session) return false;
+
+    try {
+      if (session instanceof SshClient || ('exec' in session && typeof (session as any).exec === 'function')) {
+        const ssh = session as SshClient;
+        
+        if ((ssh as any)._sock && (ssh as any)._sock.destroyed) return false;
+
+        return await new Promise<boolean>((resolve) => {
+          const timeout = setTimeout(() => resolve(false), 2000);
+          ssh.exec('true', (err, stream) => {
+            if (err) {
+              clearTimeout(timeout);
+              return resolve(false);
+            }
+            stream.on('close', () => {
+              clearTimeout(timeout);
+              resolve(true);
+            }).resume();
+          });
+        });
+      }
+
+      if ('closed' in session && 'pwd' in session) {
+        const ftp = session as FtpClient;
+        
+        if (ftp.closed) return false;
+
+        await Promise.race([
+          ftp.pwd(),
+          new Promise((_, reject) => setTimeout(() => reject(), 2000))
+        ]);
+        return true;
+      }
+
+      return false;
+    } catch (e: any) {
+      LoggerService.log(`[SessionProvider] Connection dead for ${key}: ${e.message || e}`);
+      return false;
+    }
+  }
+
+  static async getSession<T>(key: string, service?: any): Promise<T> {
+    const session = this.sessions[key];
+    
+    if (session) {
+      const isAlive = await this.checkConnection(key);
+      if (isAlive) {
+        return session as T;
+      }
+      LoggerService.log(`[SessionProvider] Session ${key} is dead. Cleaning up...`);
+    }
+    
+    this.closeSession(key);
+
+    if (!service) {
+      throw new Error(`No active session for ${key} and no service provided.`);
+    }
+
+    LoggerService.log(`[SessionProvider] Establishing new connection for: ${key}`);
+    const newClient = await service.connect(key); 
+    
+    if (!newClient) {
+      throw new Error(`Failed to connect ${key}`);
+    }
+
+    return newClient as T;
   }
 
   static setSession(key: string, session: RemoteSession) {
@@ -18,18 +85,15 @@ export class SessionProvider {
   static closeSession(key: string) {
     const session = this.sessions[key];
     if (session) {
-      if (typeof (session as any).end === 'function') {
-        (session as any).end();
-      } else if (typeof (session as any).close === 'function') {
-        (session as any).close();
+      try {
+        if ('end' in session && typeof (session as any).end === 'function') {
+          (session as any).end();
+        } else if ('close' in session && typeof (session as any).close === 'function') {
+          (session as any).close();
+        }
+      } catch (e) {
       }
       delete this.sessions[key];
-    }
-  }
-
-  static closeAllSessions() {
-    for (const key of Object.keys(this.sessions)) {
-      this.closeSession(key);
     }
   }
 }

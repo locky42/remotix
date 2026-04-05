@@ -20,7 +20,6 @@
     "onCommand:remotix.addConnection",
     "onCommand:remotix.editConnection",
     "onCommand:remotix.openSshTerminal",
-    "onCommand:remotix.downloadFile",
     "onCommand:remotix.upload",
     "onCommand:remotix.editFile",
     "onCommand:remotix.deleteFile",
@@ -58,11 +57,6 @@
         "command": "remotix.editFile",
         "title": "Edit File",
         "icon": "$(edit)"
-      },
-      {
-        "command": "remotix.downloadFile",
-        "title": "Download",
-        "icon": "$(cloud-download)"
       },
       {
         "command": "remotix.upload",
@@ -155,11 +149,6 @@
           "command": "remotix.copyPath",
           "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder)",
           "group": "2_path"
-        },
-        {
-          "command": "remotix.downloadFile",
-          "when": "view == remotixView && viewItem == ssh-file",
-          "group": "3_transfer"
         },
         {
           "command": "remotix.upload",

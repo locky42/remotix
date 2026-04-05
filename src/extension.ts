@@ -1,26 +1,35 @@
 import * as vscode from 'vscode';
-import { LangService } from './services/LangService';
 import { ConnectionItem } from './types';
+import { registerUiCommands } from './commands/ui';
+import { LangService } from './services/LangService';
 import { TreeDataProvider } from './ui/TreeDataProvider';
 import { ConfigService } from './services/ConfigService';
 import { registerFileFolderCommands } from './commands/files';
 import { registerConnectionCommands } from './commands/connections';
-import { registerUiCommands } from './commands/ui';
+import { Container } from './services/Container';
+import { ConnectionManager } from './services/ConnectionManager';
+import { RemoteServiceProvider } from './services/RemoteServiceProvider';
 
-function saveConnection(conn: ConnectionItem, global: boolean, context: vscode.ExtensionContext) {
+function saveConnection(connection: ConnectionItem, global: boolean) {
   if (global) {
-    const config = ConfigService.getGlobalConfig(context);
-    config.connections.push(conn);
-    ConfigService.saveGlobalConfig(context, config);
+    const config = ConfigService.getGlobalConfig();
+    config.connections.push(connection);
+    ConfigService.saveGlobalConfig(config);
   } else {
     const config = ConfigService.getProjectConfig();
-    config.connections.push(conn);
+    config.connections.push(connection);
     ConfigService.saveProjectConfig(config);
   }
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  const treeDataProvider = new TreeDataProvider(context);
+  Container.set('extensionContext', context);
+  Container.set('connectionManager', new ConnectionManager());
+  const remoteServiceProvider = new RemoteServiceProvider();
+  Container.set('remoteServiceProvider', remoteServiceProvider);
+  const treeDataProvider = new TreeDataProvider();
+  Container.set('treeDataProvider', treeDataProvider);
+
   const treeView = vscode.window.createTreeView('remotixView', {
     treeDataProvider,
     dragAndDropController: treeDataProvider
@@ -28,23 +37,23 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(treeView);
 
   // Register file/folder operation commands in a separate module
-  registerFileFolderCommands(context, treeDataProvider);
+  registerFileFolderCommands();
 
   // Register connection commands in a separate module
-  registerConnectionCommands(context, treeDataProvider, saveConnection);
+  registerConnectionCommands(saveConnection);
 
   // Register UI commands in a separate module
-  registerUiCommands(context, treeDataProvider);
+  registerUiCommands();
 
   context.subscriptions.push(vscode.commands.registerCommand('remotix.openSshTerminal', async (item: vscode.TreeItem) => {
-    const conn = treeDataProvider.getConnectionByLabel(item.label as string);
-    if (!conn || conn.type !== 'ssh') return;
-    let sshCmd = `ssh${conn.port ? ' -p ' + conn.port : ''}`;
-    if (conn.authMethod === 'privateKey' && conn.authFile) {
-      sshCmd += ` -i "${conn.authFile}"`;
+    const connection = treeDataProvider.getConnectionByLabel(item.label as string);
+    if (!connection || connection.type !== 'ssh') return;
+    let sshCmd = `ssh${connection.port ? ' -p ' + connection.port : ''}`;
+    if (connection.authMethod === 'privateKey' && connection.authFile) {
+      sshCmd += ` -i "${connection.authFile}"`;
     }
-    sshCmd += ` ${conn.user}@${conn.host}`;
-    if (conn.authMethod === 'password' && conn.password) {
+    sshCmd += ` ${connection.user}@${connection.host}`;
+    if (connection.authMethod === 'password' && connection.password) {
       const { execSync } = require('child_process');
       let sshpassExists = false;
       try {
@@ -54,12 +63,12 @@ export function activate(context: vscode.ExtensionContext) {
         sshpassExists = false;
       }
       if (sshpassExists) {
-        sshCmd = `sshpass -p '${conn.password.replace(/'/g, "'\\''")}' ` + sshCmd;
+        sshCmd = `sshpass -p '${connection.password.replace(/'/g, "'\\''")}' ` + sshCmd;
       } else {
         vscode.window.showInformationMessage(LangService.t('sshpassNotFound'));
       }
     }
-    const terminal = vscode.window.createTerminal({ name: conn.label });
+    const terminal = vscode.window.createTerminal({ name: connection.label });
     terminal.sendText(sshCmd);
     terminal.show();
   }));

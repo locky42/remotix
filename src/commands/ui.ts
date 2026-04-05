@@ -1,10 +1,14 @@
 import * as vscode from 'vscode';
+import { Container } from '../services/Container';
 import { LangService } from '../services/LangService';
 import { ConfigService } from '../services/ConfigService';
+import { TreeDataProvider } from '../ui/TreeDataProvider';
 
-export function registerUiCommands(context: vscode.ExtensionContext, treeDataProvider: any) {
+export function registerUiCommands() {
+    const context = Container.get('extensionContext') as vscode.ExtensionContext;
+    const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
+
     context.subscriptions.push(vscode.commands.registerCommand('remotixView.itemClick', async (item: any) => {
-        console.log('[remotixView.itemClick] item:', item);
         await vscode.commands.executeCommand('remotix.editFile', item);
     }));
 
@@ -26,7 +30,7 @@ export function registerUiCommands(context: vscode.ExtensionContext, treeDataPro
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('remotix.showConfig', async () => {
-        const config = ConfigService.getGlobalConfig(context);
+        const config = ConfigService.getGlobalConfig();
         vscode.window.showInformationMessage(LangService.t('globalConfigPrefix') + JSON.stringify(config));
     }));
 }

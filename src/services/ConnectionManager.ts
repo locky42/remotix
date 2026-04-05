@@ -1,12 +1,24 @@
 import { ConnectionItem } from '../types';
+import { ConfigService } from './ConfigService';
 
 export class ConnectionManager {
-  private connections: ConnectionItem[];
+  private connections: ConnectionItem[] = [];
   private onChange: () => void;
 
-  constructor(connections: ConnectionItem[], onChange: () => void) {
-    this.connections = connections;
+  constructor(onChange: () => void = () => {}) {
     this.onChange = onChange;
+    this.load();
+  }
+
+  setOnChange(onChange: () => void) {
+    this.onChange = onChange;
+  }
+
+  load() {
+    const connections = ConfigService.getGlobalConfig().connections;
+    this.connections.length = 0;
+    this.connections.push(...connections);
+    this.onChange();
   }
 
   getAll() {

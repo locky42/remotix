@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
+import { Container } from '../services/Container';
 import { ConnectionManager } from '../services/ConnectionManager';
+import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
 
 export class DragAndDropController implements vscode.TreeDragAndDropController<vscode.TreeItem> {
   readonly dragMimeTypes: string[] = ['application/vnd.code.tree.remotixView'];
@@ -7,14 +9,14 @@ export class DragAndDropController implements vscode.TreeDragAndDropController<v
 
   constructor(private connectionManager: ConnectionManager, private fireChange: () => void, private treeDataProvider: any) {}
 
-  handleDrag(source: vscode.TreeItem[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void {
+  handleDrag(source: vscode.TreeItem[], dataTransfer: vscode.DataTransfer): void {
     const payload = DragAndDropController.serializeDragItems(source);
     if (payload && payload !== '[]') {
       dataTransfer.set('application/vnd.code.tree.remotixView', new vscode.DataTransferItem(payload));
     }
   }
 
-  async handleDrop(target: vscode.TreeItem | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void> {
+  async handleDrop(target: vscode.TreeItem | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
     // DEBUG LOG: handleDrop ENTRY
     // @ts-ignore
     if (typeof console !== 'undefined') console.log('[DragAndDropController][DEBUG] handleDrop ENTRY', { target, dataTransfer });
@@ -34,17 +36,15 @@ export class DragAndDropController implements vscode.TreeDragAndDropController<v
     const targetFolder = (target as any).contextValue.endsWith('folder')
       ? (target as any).sshPath || (target as any).ftpPath
       : ((target as any).sshPath || (target as any).ftpPath || '').split('/').slice(0, -1).join('/') || '.';
-    const { createRemoteService } = await import('../factories/RemoteServiceFactory');
-    const remoteService = createRemoteService(target, this.treeDataProvider);
+    const remoteService = await (Container.get('remoteServiceProvider') as RemoteServiceProvider).getRemoteService((target as any).connectionLabel);
     if (!remoteService || !remoteService.moveItems) return;
-    // Filter items with either sshPath or ftpPath and a valid connectionLabel
     const validDraggedItems = draggedItems.filter((item: any) =>
       ((!!item.sshPath || !!item.ftpPath) && typeof item.connectionLabel === 'string' && !!item.connectionLabel)
     ).map((item: any) => ({
-      sshPath: item.sshPath || item.ftpPath, // moveItems expects sshPath, so map ftpPath to sshPath
+      sshPath: item.sshPath || item.ftpPath,
       connectionLabel: item.connectionLabel
     }));
-    // DEBUG LOG: About to call moveItems
+    
     // @ts-ignore
     if (typeof console !== 'undefined') console.log('[DragAndDropController][DEBUG] Calling moveItems', { validDraggedItems, targetFolder });
     // Use onDone callback to refresh after moveItems completes

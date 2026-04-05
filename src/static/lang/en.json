@@ -79,6 +79,7 @@
   "renameFailed": "Rename failed: {error}",
   "renamedTo": "Renamed to {name}",
   "missingPathOrConnection": "Path or connection not specified",
+  "uploadError": "Failed to upload: {error}",
   "enterNewFolderName": "Enter new folder name",
   "createFolderFailed": "Failed to create folder: {error}",
   "folderCreated": "Folder created: {path}",

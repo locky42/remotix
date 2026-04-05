@@ -13,23 +13,23 @@ export class TreeItemFactory {
     return addItem;
   }
 
-  createConnectionTreeItem(conn: ConnectionItem): vscode.TreeItem {
-    const item = new vscode.TreeItem(conn.label, vscode.TreeItemCollapsibleState.Collapsed);
+  createConnectionTreeItem(connection: ConnectionItem): vscode.TreeItem {
+    const item = new vscode.TreeItem(connection.label, vscode.TreeItemCollapsibleState.Collapsed);
     let desc = '';
-    if (conn.type === 'ssh') {
-      desc = `${conn.user || ''}@${conn.detail || ''}:${conn.port || ''}`;
-      item.tooltip = `${LangService.t('editConnection')}: ${conn.user || ''}@${conn.detail || ''}:${conn.port || ''}\n${LangService.t('openSshTerminal')}`;
+    if (connection.type === 'ssh') {
+      desc = `${connection.user || ''}@${connection.detail || ''}:${connection.port || ''}`;
+      item.tooltip = `${LangService.t('editConnection')}: ${connection.user || ''}@${connection.detail || ''}:${connection.port || ''}\n${LangService.t('openSshTerminal')}`;
     } else {
-      desc = `${conn.user || ''}@${conn.detail || ''}:${conn.port || ''}`;
-      item.tooltip = `${LangService.t('editConnection')}: ${conn.user || ''}@${conn.detail || ''}:${conn.port || ''}`;
+      desc = `${connection.user || ''}@${connection.detail || ''}:${connection.port || ''}`;
+      item.tooltip = `${LangService.t('editConnection')}: ${connection.user || ''}@${connection.detail || ''}:${connection.port || ''}`;
     }
     item.description = desc;
-    item.iconPath = conn.type === 'ssh'
+    item.iconPath = connection.type === 'ssh'
       ? new vscode.ThemeIcon('terminal')
       : new vscode.ThemeIcon('cloud');
     (item as any).contextValue = 'connection';
     (item as any).sshPath = '.';
-    (item as any).connectionLabel = conn.label;
+    (item as any).connectionLabel = connection.label;
     return item;
   }
 

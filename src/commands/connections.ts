@@ -1,11 +1,16 @@
-import * as vscode from 'vscode';
-import { LangService } from '../services/LangService';
-import * as path from 'path';
 import * as fs from 'fs';
-import { ConfigService } from '../services/ConfigService';
+import * as path from 'path';
+import * as vscode from 'vscode';
+import { Container } from '../services/Container';
 import { getAddConnectionHtml } from '../ui/webview';
+import { LangService } from '../services/LangService';
+import { ConfigService } from '../services/ConfigService';
+import { TreeDataProvider } from '../ui/TreeDataProvider';
 
-export function registerConnectionCommands(context: vscode.ExtensionContext, treeDataProvider: any, saveConnection: Function) {
+export function registerConnectionCommands(saveConnection: Function) {
+  const context = Container.get('extensionContext') as vscode.ExtensionContext;
+  const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
+
   context.subscriptions.push(vscode.commands.registerCommand('remotix.importFileZilla', async () => {
     try {
       const defaultPaths = [
@@ -125,18 +130,18 @@ export function registerConnectionCommands(context: vscode.ExtensionContext, tre
       );
       if (!picks || picks.length === 0) return;
       const toImport = connections.filter(c => picks.find(p => p.label === c.label && p.type === c.type));
-      const config = ConfigService.getGlobalConfig(context);
+      const config = ConfigService.getGlobalConfig();
       let added = 0;
-      for (const conn of toImport) {
+      for (const connection of toImport) {
         const exists = config.connections.some(
-          (c: any) => c.host === conn.host && c.port === conn.port && c.user === conn.user && c.type === (conn.type as 'ftp' | 'ssh')
+          (c: any) => c.host === connection.host && c.port === connection.port && c.user === connection.user && c.type === (connection.type as 'ftp' | 'ssh')
         );
         if (!exists) {
-          config.connections.push({ ...conn, type: conn.type as 'ftp' | 'ssh' });
+          config.connections.push({ ...connection, type: connection.type as 'ftp' | 'ssh', port: parseInt(connection.port, 10) });
           added++;
         }
       }
-      ConfigService.saveGlobalConfig(context, config);
+      ConfigService.saveGlobalConfig(config);
       if (added > 0) {
         if (Array.isArray((treeDataProvider as any).connections)) {
           (treeDataProvider as any).connections = config.connections.slice();
@@ -196,12 +201,12 @@ export function registerConnectionCommands(context: vscode.ExtensionContext, tre
       );
       if (!picks || picks.length === 0) return;
       const toImport = connections.filter(c => picks.find(p => p.label === c.label));
-      const config = ConfigService.getGlobalConfig(context);
-      for (const conn of toImport) {
-        config.connections.push(conn);
-        treeDataProvider.addConnection(conn);
+      const config = ConfigService.getGlobalConfig();
+      for (const connection of toImport) {
+        config.connections.push(connection);
+        treeDataProvider.addConnection(connection);
       }
-      ConfigService.saveGlobalConfig(context, config);
+      ConfigService.saveGlobalConfig(config);
       vscode.window.showInformationMessage(LangService.t('importedConnections', { count: toImport.length, source: sshConfigPath }));
     } catch (e) {
       vscode.window.showErrorMessage(LangService.t('importErrorSsh', { error: (e instanceof Error ? e.message : String(e)) }));
@@ -219,9 +224,9 @@ export function registerConnectionCommands(context: vscode.ExtensionContext, tre
     panel.webview.onDidReceiveMessage(
       async (message) => {
         if (message.command === 'add') {
-          const conn = message.data;
-          saveConnection(conn, !!conn.global, context);
-          treeDataProvider.addConnection(conn);
+          const connection = message.data;
+          saveConnection(connection, !!connection.global);
+          treeDataProvider.addConnection(connection);
           panel.dispose();
         } else if (message.command === 'cancel') {
           panel.dispose();
@@ -238,21 +243,21 @@ export function registerConnectionCommands(context: vscode.ExtensionContext, tre
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('remotix.editConnection', async (item: vscode.TreeItem) => {
-    const conn = treeDataProvider.getConnectionByLabel(item.label as string);
-    if (!conn) return;
+    const connection = treeDataProvider.getConnectionByLabel(item.label as string);
+    if (!connection) return;
     const panel = vscode.window.createWebviewPanel(
       'remotixEditConnection',
       LangService.t('editConnection'),
       vscode.ViewColumn.One,
       { enableScripts: true }
     );
-    panel.webview.html = getAddConnectionHtml(conn);
+    panel.webview.html = getAddConnectionHtml(connection);
     panel.webview.onDidReceiveMessage(
       (message) => {
         if (message.command === 'add') {
-          Object.assign(conn, message.data);
-          conn.label = `${conn.type.toUpperCase()}: ${conn.label}`;
-          conn.detail = `${conn.user}@${conn.host}:${conn.port}`;
+          Object.assign(connection, message.data);
+          connection.label = `${connection.type.toUpperCase()}: ${connection.label}`;
+          connection.detail = `${connection.user}@${connection.host}:${connection.port}`;
           treeDataProvider.refresh();
           panel.dispose();
         } else if (message.command === 'cancel') {
@@ -272,8 +277,8 @@ export function registerConnectionCommands(context: vscode.ExtensionContext, tre
 
   context.subscriptions.push(vscode.commands.registerCommand('remotix.deleteConnection', async (item: vscode.TreeItem) => {
     const label = item.label as string;
-    const conn = treeDataProvider.getConnectionByLabel(label);
-    if (!conn) return;
+    const connection = treeDataProvider.getConnectionByLabel(label);
+    if (!connection) return;
     const confirm = await vscode.window.showWarningMessage(
       LangService.t('confirmDeleteConnection', { label }),
       { modal: true },
@@ -281,11 +286,11 @@ export function registerConnectionCommands(context: vscode.ExtensionContext, tre
     );
     if (confirm !== LangService.t('delete')) return;
     // Remove from global config
-    const globalConfig = ConfigService.getGlobalConfig(context);
+    const globalConfig = ConfigService.getGlobalConfig();
     const idx = globalConfig.connections.findIndex((c: any) => c.label === label);
     if (idx !== -1) {
       globalConfig.connections.splice(idx, 1);
-      ConfigService.saveGlobalConfig(context, globalConfig);
+      ConfigService.saveGlobalConfig(globalConfig);
     }
     // Remove from project config
     const projectConfig = ConfigService.getProjectConfig();

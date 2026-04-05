@@ -1,23 +1,26 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { RemotixConfig } from '../types';
 import * as vscode from 'vscode';
+import { Container } from './Container';
+import { RemotixConfig } from '../types';
 
 export class ConfigService {
-  static getGlobalConfig(context: vscode.ExtensionContext): RemotixConfig {
-    const configPath = ConfigService.getGlobalConfigPath(context);
+  static getGlobalConfig(): RemotixConfig {
+    const configPath = ConfigService.getGlobalConfigPath();
     if (fs.existsSync(configPath)) {
       return JSON.parse(fs.readFileSync(configPath, 'utf8'));
     }
     return { connections: [] };
   }
 
-  static saveGlobalConfig(context: vscode.ExtensionContext, config: RemotixConfig) {
-    const configPath = ConfigService.getGlobalConfigPath(context);
+  static saveGlobalConfig(config: RemotixConfig) {
+    const configPath = ConfigService.getGlobalConfigPath();
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
   }
 
-  private static getGlobalConfigPath(context: vscode.ExtensionContext) {
+  private static getGlobalConfigPath() {
+    const context = Container.get('extensionContext') as vscode.ExtensionContext;
+
     const dir = context.globalStorageUri.fsPath;
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     return path.join(dir, 'remotix-connections.json');
