@@ -2,7 +2,7 @@
   "name": "remotix-extension",
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "locky42",
   "repository": {
     "type": "git",

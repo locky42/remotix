@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-04-06
+
+### Added
+
+- Full remote copy workflow for SSH/FTP items (`Copy`/`Paste`).
+- Paste support from system clipboard (including plain-text paths).
+- Progress UI for copy operations with elapsed time.
+- FTP copy status updates in the status bar.
+
+### Changed
+
+- Tree opening behavior: added full connection tree rendering.
+
+### Fixed
+
+- `remotix.copyPath` command registration and execution (`command not found` issue).
+- Persistent FTP copy status display during recursive transfers.
+
 ## [1.0.0] - 2026-04-05
 
 ### Added
