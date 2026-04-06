@@ -11,9 +11,110 @@ type RemoteClipboard = {
   sourcePath: string;
   sourceName: string;
   isDirectory: boolean;
+  sourceKind?: 'remote' | 'local';
 };
 
 let remoteClipboard: RemoteClipboard | undefined;
+const REMOTIX_CLIPBOARD_PREFIX = 'remotix-clipboard:';
+
+function serializeRemoteClipboard(payload: RemoteClipboard): string {
+  return `${REMOTIX_CLIPBOARD_PREFIX}${encodeURIComponent(JSON.stringify(payload))}`;
+}
+
+function parseRemoteClipboard(raw: string): RemoteClipboard | undefined {
+  const text = String(raw || '').trim();
+  if (!text.startsWith(REMOTIX_CLIPBOARD_PREFIX)) {
+    return undefined;
+  }
+
+  const encoded = text.slice(REMOTIX_CLIPBOARD_PREFIX.length);
+  if (!encoded) {
+    return undefined;
+  }
+
+  try {
+    const decoded = decodeURIComponent(encoded);
+    const data = JSON.parse(decoded) as Partial<RemoteClipboard>;
+    if (
+      typeof data?.connectionLabel !== 'string' ||
+      typeof data?.sourcePath !== 'string' ||
+      typeof data?.sourceName !== 'string' ||
+      typeof data?.isDirectory !== 'boolean'
+    ) {
+      return undefined;
+    }
+
+    return {
+      connectionLabel: data.connectionLabel,
+      sourcePath: data.sourcePath,
+      sourceName: data.sourceName,
+      isDirectory: data.isDirectory,
+      sourceKind: data.sourceKind === 'local' ? 'local' : 'remote'
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function parsePlainClipboardPath(raw: string): string | undefined {
+  const text = String(raw || '').trim();
+  if (!text || text.startsWith(REMOTIX_CLIPBOARD_PREFIX)) {
+    return undefined;
+  }
+
+  // Accept first line only to avoid accidental multiline clipboard contents.
+  const firstLine = text.split(/\r?\n/).map(line => line.trim()).find(Boolean);
+  if (!firstLine) {
+    return undefined;
+  }
+
+  return firstLine;
+}
+
+async function buildClipboardFromPlainPath(pathText: string, connectionLabel: string): Promise<RemoteClipboard | undefined> {
+  const fs = await import('fs');
+  const sourcePath = pathText.trim();
+  if (!sourcePath) {
+    return undefined;
+  }
+
+  const parts = sourcePath.replace(/\\/g, '/').split('/').filter(Boolean);
+  const sourceName = parts.length > 0 ? parts[parts.length - 1] : sourcePath;
+
+  let isDirectory = /\/$/.test(sourcePath);
+  let sourceKind: 'remote' | 'local' = 'remote';
+
+  try {
+    const stat = fs.statSync(sourcePath);
+    sourceKind = 'local';
+    isDirectory = stat.isDirectory();
+  } catch {
+  }
+
+  if (!isDirectory) {
+    if (sourceKind === 'remote') {
+      const picked = await vscode.window.showQuickPick(
+        [
+          { label: '$(file) File', value: 'file' },
+          { label: '$(folder) Folder', value: 'folder' }
+        ],
+        { placeHolder: 'Clipboard path type' }
+      );
+      if (!picked) {
+        return undefined;
+      }
+      isDirectory = picked.value === 'folder';
+    }
+  }
+
+  return {
+    connectionLabel,
+    sourcePath,
+    sourceName,
+    isDirectory,
+    sourceKind
+  };
+}
 
 function getItemPath(item: any): string | undefined {
   return item?.sshPath || item?.ftpPath;
@@ -210,8 +311,14 @@ export function registerFileFolderCommands() {
       connectionLabel: connection.label,
       sourcePath,
       sourceName: getItemName(item, sourcePath),
-      isDirectory: isDirectoryItem(item)
+      isDirectory: isDirectoryItem(item),
+      sourceKind: 'remote'
     };
+
+    try {
+      await vscode.env.clipboard.writeText(serializeRemoteClipboard(remoteClipboard));
+    } catch {
+    }
 
     vscode.window.showInformationMessage(
       LangService.t(
@@ -222,18 +329,37 @@ export function registerFileFolderCommands() {
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('remotix.pasteItem', async (item: any) => {
-    if (!remoteClipboard) {
-      vscode.window.showWarningMessage(LangService.t('clipboardEmpty'));
-      return;
-    }
-
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
       return;
     }
 
-    if (connection.label !== remoteClipboard.connectionLabel) {
+    try {
+      const rawClipboard = await vscode.env.clipboard.readText();
+      const systemClipboard = parseRemoteClipboard(rawClipboard);
+      if (systemClipboard) {
+        remoteClipboard = systemClipboard;
+      } else {
+        const plainPath = parsePlainClipboardPath(rawClipboard);
+        if (plainPath) {
+          const plainClipboard = await buildClipboardFromPlainPath(plainPath, connection.label);
+          if (plainClipboard) {
+            remoteClipboard = plainClipboard;
+          }
+        }
+      }
+    } catch {
+    }
+
+    if (!remoteClipboard) {
+      vscode.window.showWarningMessage(LangService.t('clipboardEmpty'));
+      return;
+    }
+
+    const sourceKind = remoteClipboard.sourceKind || 'remote';
+
+    if (sourceKind === 'remote' && connection.label !== remoteClipboard.connectionLabel) {
       vscode.window.showWarningMessage(LangService.t('copyPasteConnectionMismatch'));
       return;
     }
@@ -313,7 +439,15 @@ export function registerFileFolderCommands() {
           }, 1000);
 
           try {
-            await service.copyItem?.(remoteClipboard!.sourcePath, targetPath, remoteClipboard!.isDirectory);
+            if ((remoteClipboard!.sourceKind || 'remote') === 'local') {
+              if (remoteClipboard!.isDirectory) {
+                await service.uploadDir(remoteClipboard!.sourcePath, targetPath);
+              } else {
+                await service.upload(remoteClipboard!.sourcePath, targetPath);
+              }
+            } else {
+              await service.copyItem?.(remoteClipboard!.sourcePath, targetPath, remoteClipboard!.isDirectory);
+            }
           } finally {
             clearInterval(ticker);
           }
