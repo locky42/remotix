@@ -114,6 +114,7 @@
   "copyInProgressElapsed": "Копіювання триває... {seconds}с",
   "copySuccess": "Копіювання завершено: {path}",
   "copyFailed": "Не вдалося скопіювати: {error}",
+  "copiedPathToClipboard": "Шлях скопійовано в буфер обміну",
   "openFile": "Відкрити файл",
   "select": "Вибрати"
 }

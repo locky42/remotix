@@ -114,6 +114,7 @@
   "copyInProgressElapsed": "Copy in progress... {seconds}s",
   "copySuccess": "Copy completed: {path}",
   "copyFailed": "Copy failed: {error}",
+  "copiedPathToClipboard": "Path copied to clipboard",
   "openFile": "Open file",
   "select": "Select"
 }

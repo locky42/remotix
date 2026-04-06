@@ -462,4 +462,24 @@ export function registerFileFolderCommands() {
       vscode.window.showErrorMessage(LangService.t('copyFailed', { error: e instanceof Error ? e.message : String(e) }));
     }
   }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.copyPath', async (item: any) => {
+    if (!item) {
+      vscode.window.showErrorMessage(LangService.t('itemNotSelected'));
+      return;
+    }
+
+    const remotePath = (item as any).sshPath || (item as any).ftpPath;
+    if (!remotePath) {
+      vscode.window.showErrorMessage(LangService.t('pathNotFound'));
+      return;
+    }
+
+    try {
+      await vscode.env.clipboard.writeText(remotePath);
+      vscode.window.showInformationMessage(LangService.t('copiedPathToClipboard'));
+    } catch (e: any) {
+      vscode.window.showErrorMessage(LangService.t('copyFailed', { error: e instanceof Error ? e.message : String(e) }));
+    }
+  }));
 }
