@@ -7,6 +7,7 @@ import { Client as FtpClient } from 'basic-ftp';
 import { LoggerService } from '../LoggerService';
 import { SessionProvider } from '../SessionProvider';
 import { TreeDataProvider } from '../../ui/TreeDataProvider';
+import { RemotePathHelper } from '../../helpers/RemotePathHelper';
 
 // Simple async mutex for serializing FTP operations
 class AsyncMutex {
@@ -40,13 +41,8 @@ export class FtpRemoteService implements RemoteService {
     LoggerService.log('[FTP] FtpRemoteService instance created.');
   }
 
-  private normalizeRemotePath(remotePath: string): string {
-    const normalized = (remotePath || '.').replace(/\\/g, '/').trim();
-    return normalized.length > 0 ? normalized : '.';
-  }
-
   private getParentRemotePath(remotePath: string): string {
-    const normalized = this.normalizeRemotePath(remotePath).replace(/\/+$|\/+$/g, '');
+    const normalized = RemotePathHelper.normalizeRemotePath(remotePath).replace(/\/+$/g, '');
     if (!normalized || normalized === '.') {
       return '.';
     }
@@ -82,7 +78,7 @@ export class FtpRemoteService implements RemoteService {
   }
 
   private refreshFolder(treeDataProvider: TreeDataProvider, folderPath: string): void {
-    treeDataProvider.refreshRemoteFolder(this.connection.label, this.normalizeRemotePath(folderPath), 'ftp');
+    treeDataProvider.refreshRemoteFolder(this.connection.label, RemotePathHelper.normalizeRemotePath(folderPath), 'ftp');
   }
 
   private getUploadConcurrencyLimit(): number {
@@ -139,7 +135,7 @@ export class FtpRemoteService implements RemoteService {
           secureOptions: { rejectUnauthorized: false }
         });
 
-        this.initialPath = await ftpClient.pwd(); 
+        this.initialPath = RemotePathHelper.normalizeAbsolutePath(await ftpClient.pwd()); 
         LoggerService.log(`[FTP] Initial directory: ${this.initialPath}`);
 
         LoggerService.log('[FtpRemoteService] FTP connection ready');
@@ -187,6 +183,7 @@ export class FtpRemoteService implements RemoteService {
         if (path === '.') {
           requestPath = this.initialPath;
         }
+        requestPath = RemotePathHelper.normalizeAbsolutePath(requestPath);
 
         const list = await session.list(requestPath);
 
@@ -202,15 +199,20 @@ export class FtpRemoteService implements RemoteService {
           
           const cleanPath = path.endsWith('/') ? path : (path === '.' ? '' : path + '/');
           const ftpPath = path === '.' ? leafName : cleanPath + leafName;
+          const absoluteFtpPath = RemotePathHelper.normalizeAbsolutePath(ftpPath);
 
           const treeItem = new vscode.TreeItem(
             leafName,
-            isDir ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+            isDir
+              ? (RemotePathHelper.shouldAutoExpandDirectory(this.initialPath, absoluteFtpPath)
+                ? vscode.TreeItemCollapsibleState.Expanded
+                : vscode.TreeItemCollapsibleState.Collapsed)
+              : vscode.TreeItemCollapsibleState.None
           );
 
           treeItem.contextValue = isDir ? 'ftp-folder' : (isFile ? 'ftp-file' : 'ftp-unknown');
           
-          (treeItem as any).ftpPath = ftpPath;
+          (treeItem as any).ftpPath = absoluteFtpPath;
           (treeItem as any).connectionLabel = this.connection.label;
           (treeItem as any).item = item;
 
@@ -223,7 +225,7 @@ export class FtpRemoteService implements RemoteService {
               title: LangService.t('openFile'),
               arguments: [{
                 label: leafName,
-                ftpPath,
+                ftpPath: absoluteFtpPath,
                 connectionLabel: this.connection.label
               }]
             };

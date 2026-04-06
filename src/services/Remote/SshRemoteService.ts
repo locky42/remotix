@@ -8,23 +8,20 @@ import { RemoteService } from './RemoteService';
 import { LoggerService } from '../LoggerService';
 import { SessionProvider } from '../SessionProvider';
 import { TreeDataProvider } from '../../ui/TreeDataProvider';
+import { RemotePathHelper } from '../../helpers/RemotePathHelper';
 
 export class SshRemoteService implements RemoteService {
   private connection: ConnectionItem;
   private sftpClient: any | null = null;
+  private initialPath: string = '/';
 
   constructor(connection: ConnectionItem) {
     this.connection = connection;
     LoggerService.log(`[SshRemoteService] Created for ${this.connection.user}@${this.connection.host}:${this.connection.port}`);
   }
 
-  private normalizeRemotePath(remotePath: string): string {
-    const normalized = (remotePath || '.').replace(/\\/g, '/').trim();
-    return normalized.length > 0 ? normalized : '.';
-  }
-
   private getParentRemotePath(remotePath: string): string {
-    const normalized = this.normalizeRemotePath(remotePath).replace(/\/+$|\/+$/g, '');
+    const normalized = RemotePathHelper.normalizeRemotePath(remotePath).replace(/\/+$/g, '');
     if (!normalized || normalized === '.') {
       return '.';
     }
@@ -39,7 +36,7 @@ export class SshRemoteService implements RemoteService {
   }
 
   private refreshFolder(treeDataProvider: TreeDataProvider, folderPath: string): void {
-    treeDataProvider.refreshRemoteFolder(this.connection.label, this.normalizeRemotePath(folderPath), 'ssh');
+    treeDataProvider.refreshRemoteFolder(this.connection.label, RemotePathHelper.normalizeRemotePath(folderPath), 'ssh');
   }
 
   private getUploadConcurrencyLimit(): number {
@@ -93,6 +90,9 @@ export class SshRemoteService implements RemoteService {
       LoggerService.log(`[SshRemoteService] listDirectory ENTRY: path=${path}`);
       try {
           const sftp = await this.getSftp();
+          this.initialPath = await RemotePathHelper.resolveSftpInitialPath(sftp, this.initialPath, (resolvedPath) => {
+            LoggerService.log(`[SshRemoteService] Initial directory: ${resolvedPath}`);
+          });
           
           return await new Promise<vscode.TreeItem[]>((resolve) => {
               LoggerService.log(`[SshRemoteService] Using persistent SFTP for: ${path}`);
@@ -112,13 +112,17 @@ export class SshRemoteService implements RemoteService {
                               ? (f.attrs.mode & 0o170000) === 0o040000 
                               : (f.longname && f.longname.startsWith('d'));
 
-                          const item = new vscode.TreeItem(
-                              f.filename, 
-                              isDir ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
-                          );
-
                           let fullPath = path.endsWith('/') ? `${path}${f.filename}` : `${path}/${f.filename}`;
                           if (path === '.') fullPath = f.filename;
+
+                          const item = new vscode.TreeItem(
+                              f.filename, 
+                              isDir
+                                ? (RemotePathHelper.shouldAutoExpandDirectory(this.initialPath, fullPath)
+                                  ? vscode.TreeItemCollapsibleState.Expanded
+                                  : vscode.TreeItemCollapsibleState.Collapsed)
+                                : vscode.TreeItemCollapsibleState.None
+                          );
 
                           (item as any).sshPath = fullPath;
                           (item as any).connectionLabel = this.connection.label;
