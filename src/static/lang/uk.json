@@ -103,6 +103,17 @@
   "folderDeleted": "Папку видалено: {path}",
   "deleteFileFailed": "Не вдалося видалити файл: {error}",
   "fileDeleted": "Файл видалено: {path}",
+  "copiedFileToClipboard": "Скопійовано файл: {path}",
+  "copiedFolderToClipboard": "Скопійовано папку: {path}",
+  "clipboardEmpty": "Буфер обміну порожній. Спершу скопіюйте файл або папку.",
+  "copyPasteConnectionMismatch": "Вставка доступна лише в межах того самого підключення.",
+  "copyNotSupported": "Копіювання не підтримується для цього типу підключення.",
+  "enterCopyName": "Введіть назву для копії",
+  "copyInProgress": "Копіювання...",
+  "copyInProgressDetails": "Копіювання {source} в {target}",
+  "copyInProgressElapsed": "Копіювання триває... {seconds}с",
+  "copySuccess": "Копіювання завершено: {path}",
+  "copyFailed": "Не вдалося скопіювати: {error}",
   "openFile": "Відкрити файл",
   "select": "Вибрати"
 }

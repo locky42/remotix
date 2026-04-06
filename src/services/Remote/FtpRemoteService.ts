@@ -915,6 +915,120 @@ export class FtpRemoteService implements RemoteService {
     });
   }
 
+  async copyItem(sourceRemotePath: string, targetRemotePath: string, isDirectory: boolean): Promise<void> {
+    return this._mutex.acquire(async () => {
+      const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
+
+      if (!session || (session as any).closed) {
+        throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
+      }
+
+      const fs = require('fs');
+      const os = require('os');
+      const pathMod = require('path');
+      const source = this.toAbsoluteRemotePath(sourceRemotePath);
+      const target = this.toAbsoluteRemotePath(targetRemotePath);
+      const tmpRoot = pathMod.join(os.tmpdir(), `remotix_copy_${Date.now()}_${Math.random().toString(16).slice(2)}`);
+      const recentCopiedFiles: string[] = [];
+      const recentLimit = 4;
+      let copiedFileCount = 0;
+      let activeStatusMessage: vscode.Disposable | undefined;
+
+      const setPersistentStatus = (text: string): void => {
+        activeStatusMessage?.dispose();
+        activeStatusMessage = vscode.window.setStatusBarMessage(text);
+      };
+
+      const updateCopyStatus = (targetFile: string): void => {
+        copiedFileCount += 1;
+        const displayName = this.normalizeRemoteLeafName(targetFile) || targetFile;
+        recentCopiedFiles.unshift(displayName);
+        if (recentCopiedFiles.length > recentLimit) {
+          recentCopiedFiles.length = recentLimit;
+        }
+        setPersistentStatus(`Remotix: Copied ${copiedFileCount} file(s). Latest: ${recentCopiedFiles.join(', ')}`);
+      };
+
+      if (source === target) {
+        throw new Error('Source and target paths are identical');
+      }
+
+      const ensureRemoteDir = async (dirPath: string): Promise<void> => {
+        const previousDir = await session.pwd().catch(() => '/');
+        try {
+          await session.ensureDir(dirPath);
+        } finally {
+          try {
+            await session.cd(previousDir);
+          } catch {
+            await session.cd('/').catch(() => {});
+          }
+        }
+      };
+
+      const copyFileInternal = async (sourceFile: string, targetFile: string): Promise<void> => {
+        const tmpFile = pathMod.join(tmpRoot, `file_${Date.now()}_${Math.random().toString(16).slice(2)}`);
+        await fs.promises.mkdir(pathMod.dirname(tmpFile), { recursive: true });
+        await session.downloadTo(tmpFile, sourceFile);
+        await ensureRemoteDir(pathMod.posix.dirname(targetFile));
+        await session.uploadFrom(tmpFile, targetFile);
+        updateCopyStatus(targetFile);
+        await fs.promises.unlink(tmpFile).catch(() => {});
+      };
+
+      const copyDirectoryRecursive = async (sourceDir: string, targetDir: string): Promise<void> => {
+        await ensureRemoteDir(targetDir);
+        const list = await session.list(sourceDir);
+        const entries = list.filter((entry: any) => {
+          const leafName = this.normalizeRemoteLeafName(entry.name);
+          return leafName !== '.' && leafName !== '..';
+        });
+
+        for (const entry of entries) {
+          const leafName = this.normalizeRemoteLeafName(entry.name);
+          const sourceEntryPath = sourceDir.endsWith('/') ? `${sourceDir}${leafName}` : `${sourceDir}/${leafName}`;
+          const targetEntryPath = targetDir.endsWith('/') ? `${targetDir}${leafName}` : `${targetDir}/${leafName}`;
+          if (entry.type === 2) {
+            await copyDirectoryRecursive(sourceEntryPath, targetEntryPath);
+          } else if (entry.type === 1) {
+            await copyFileInternal(sourceEntryPath, targetEntryPath);
+          }
+        }
+      };
+
+      LoggerService.log(`[FTP][COPY] START type=${isDirectory ? 'directory' : 'file'} ${source} -> ${target}`);
+
+      try {
+        await fs.promises.mkdir(tmpRoot, { recursive: true });
+        setPersistentStatus(`Remotix: Copy started... ${this.normalizeRemoteLeafName(source)} -> ${this.normalizeRemoteLeafName(target)}`);
+        if (isDirectory) {
+          await copyDirectoryRecursive(source, target);
+        } else {
+          await copyFileInternal(source, target);
+        }
+        LoggerService.log(`[FTP][COPY] END success: ${source} -> ${target}`);
+        activeStatusMessage?.dispose();
+        activeStatusMessage = undefined;
+        vscode.window.setStatusBarMessage(
+          `Remotix: Copy completed (${copiedFileCount} file(s)). Latest: ${recentCopiedFiles.join(', ')}`,
+          5000
+        );
+      } catch (err: any) {
+        LoggerService.log(`[FTP][COPY] END fail: ${source} -> ${target} error=${err.message || String(err)}`);
+        activeStatusMessage?.dispose();
+        activeStatusMessage = undefined;
+        vscode.window.setStatusBarMessage(
+          `Remotix: Copy failed after ${copiedFileCount} file(s)`,
+          5000
+        );
+        throw err;
+      } finally {
+        activeStatusMessage?.dispose();
+        await fs.promises.rm(tmpRoot, { recursive: true, force: true }).catch(() => {});
+      }
+    });
+  }
+
 
   async editFileWithDialogs(item: any): Promise<void> {
     return this._mutex.acquire(async () => {

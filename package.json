@@ -44,7 +44,9 @@
     "onCommand:remotix.openSettings",
     "onCommand:remotix.createFile",
     "onCommand:remotix.createFolder",
-    "onCommand:remotix.refresh"
+    "onCommand:remotix.refresh",
+    "onCommand:remotix.copyItem",
+    "onCommand:remotix.pasteItem"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -139,6 +141,16 @@
         "command": "remotix.refresh",
         "title": "%command.refresh%",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "remotix.copyItem",
+        "title": "%command.copyItem%",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "remotix.pasteItem",
+        "title": "%command.pasteItem%",
+        "icon": "$(clippy)"
       }
     ],
     "menus": {
@@ -208,6 +220,16 @@
           "command": "remotix.copyPath",
           "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder)",
           "group": "2_path"
+        },
+        {
+          "command": "remotix.copyItem",
+          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder || viewItem == ftp-file || viewItem == ftp-folder)",
+          "group": "4_modification@0"
+        },
+        {
+          "command": "remotix.pasteItem",
+          "when": "view == remotixView && (viewItem == ssh-folder || viewItem == ftp-folder)",
+          "group": "4_modification@0"
         },
         {
           "command": "remotix.upload",

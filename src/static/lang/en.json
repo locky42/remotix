@@ -103,6 +103,17 @@
   "folderDeleted": "Folder deleted: {path}",
   "deleteFileFailed": "Failed to delete file: {error}",
   "fileDeleted": "File deleted: {path}",
+  "copiedFileToClipboard": "Copied file: {path}",
+  "copiedFolderToClipboard": "Copied folder: {path}",
+  "clipboardEmpty": "Clipboard is empty. Copy a file or folder first.",
+  "copyPasteConnectionMismatch": "Paste is available only within the same connection.",
+  "copyNotSupported": "Copy is not supported for this connection type.",
+  "enterCopyName": "Enter name for the copied item",
+  "copyInProgress": "Copying...",
+  "copyInProgressDetails": "Copying {source} to {target}",
+  "copyInProgressElapsed": "Copy in progress... {seconds}s",
+  "copySuccess": "Copy completed: {path}",
+  "copyFailed": "Copy failed: {error}",
   "openFile": "Open file",
   "select": "Select"
 }

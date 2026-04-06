@@ -18,6 +18,8 @@
   "command.openSettings": "Remotix: Відкрити налаштування",
   "command.createFile": "Створити файл",
   "command.createFolder": "Створити папку",
+  "command.copyItem": "Копіювати",
+  "command.pasteItem": "Вставити",
   "command.refresh": "Оновити",
   "config.title": "Remotix",
   "config.language.item.auto": "Авто (мова інтерфейсу VS Code)",

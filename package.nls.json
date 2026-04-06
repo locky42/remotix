@@ -18,6 +18,8 @@
   "command.openSettings": "Remotix: Open Settings",
   "command.createFile": "Create File",
   "command.createFolder": "Create Folder",
+  "command.copyItem": "Copy",
+  "command.pasteItem": "Paste",
   "command.refresh": "Refresh",
   "config.title": "Remotix",
   "config.language.item.auto": "Auto (VS Code UI language)",

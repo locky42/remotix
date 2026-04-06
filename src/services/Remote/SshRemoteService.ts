@@ -876,6 +876,95 @@ export class SshRemoteService implements RemoteService {
     });
   }
 
+  private quoteForShell(value: string): string {
+    return `'${String(value || '').replace(/'/g, `'"'"'`)}'`;
+  }
+
+  async copyItem(sourceRemotePath: string, targetRemotePath: string, isDirectory: boolean): Promise<void> {
+    const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
+
+    if (!session) {
+      throw new Error('SSH session is not available');
+    }
+
+    const source = String(sourceRemotePath || '').trim();
+    const target = String(targetRemotePath || '').trim();
+    if (!source || !target) {
+      throw new Error('Source or target path is missing');
+    }
+
+    const copyCmd = `cp -a ${this.quoteForShell(source)} ${this.quoteForShell(target)}`;
+    LoggerService.log(`[SSH][COPY] START type=${isDirectory ? 'directory' : 'file'} ${source} -> ${target}`);
+
+    await new Promise<void>((resolve, reject) => {
+      const timeoutMs = 120000;
+      session.exec(copyCmd, (err: Error | undefined, stream: any) => {
+        if (err) {
+          LoggerService.log(`[SSH][COPY] END fail: ${source} -> ${target} error=${err.message}`);
+          return reject(err);
+        }
+
+        let settled = false;
+        const finalize = (error?: Error): void => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timeoutHandle);
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        };
+
+        const timeoutHandle = setTimeout(() => {
+          const timeoutError = new Error(`Copy timeout after ${timeoutMs}ms`);
+          LoggerService.log(`[SSH][COPY] END fail: ${source} -> ${target} error=${timeoutError.message}`);
+          try {
+            if (typeof stream?.close === 'function') {
+              stream.close();
+            }
+          } catch {
+          }
+          finalize(timeoutError);
+        }, timeoutMs);
+
+        let stderr = '';
+        if (stream?.stderr) {
+          stream.stderr.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString();
+          });
+        }
+
+        const handleExit = (code: number | null): void => {
+          if (code === 0) {
+            LoggerService.log(`[SSH][COPY] END success: ${source} -> ${target}`);
+            finalize();
+            return;
+          }
+
+          const errorMessage = stderr.trim() || `cp exited with code ${String(code)}`;
+          LoggerService.log(`[SSH][COPY] END fail: ${source} -> ${target} error=${errorMessage}`);
+          finalize(new Error(errorMessage));
+        };
+
+        stream.on('exit', (code: number | null) => {
+          handleExit(code);
+        });
+
+        stream.on('close', (code: number | null) => {
+          handleExit(code);
+        });
+
+        stream.on('error', (streamErr: Error) => {
+          LoggerService.log(`[SSH][COPY] STREAM fail: ${source} -> ${target} error=${streamErr.message}`);
+          finalize(streamErr);
+        });
+      });
+    });
+  }
+
 
   async editFileWithDialogs(item: any): Promise<void> {
     const filePath = item.ftpPath || item.sshPath;

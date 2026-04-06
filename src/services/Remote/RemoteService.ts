@@ -24,6 +24,8 @@ export interface RemoteService {
 
   renameWithDialogs?(item: any): Promise<void>;
   rename(oldRemotePath: string, newRemotePath: string): Promise<void>;
+
+  copyItem?(sourceRemotePath: string, targetRemotePath: string, isDirectory: boolean): Promise<void>;
   
   editFileWithDialogs?(item: any): Promise<void>;
   
