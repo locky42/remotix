@@ -112,9 +112,16 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  refresh(element?: vscode.TreeItem) {
-    this._onDidChangeTreeData.fire(element);
+refresh(element?: vscode.TreeItem) {
+  if (element) {
+    const elementAny = element as any;
+    if (elementAny.children) {
+      delete elementAny.children;
+    }
   }
+  
+  this._onDidChangeTreeData.fire(element);
+}
 
   async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
     if ((element as any)?.children) {

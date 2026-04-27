@@ -138,10 +138,30 @@ export class SshRemoteService implements RemoteService {
               
               sftp.readdir(path, (err: Error | undefined, list: any[]) => {
                   if (err) {
-                      LoggerService.log(`[SshRemoteService] readdir error: ${err.message}`);
-                      this.sftpClient = null;
-                      vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: err.message }));
-                      return resolve([]);
+                    LoggerService.log(`[SshRemoteService] readdir error: ${err.message}`);
+
+                    if (this.initialPath.startsWith(path) && path !== this.initialPath) {
+                        
+                        vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: err.message }));
+
+                        const parts = this.initialPath.split('/').filter(p => p);
+                        const currentParts = path === '/' ? [] : path.split('/').filter(p => p);
+                        const nextPart = parts[currentParts.length];
+
+                        if (nextPart) {
+                            const nextPath = path === '/' ? `/${nextPart}` : `${path}/${nextPart}`;
+                            const virtualItem = new vscode.TreeItem(nextPart, vscode.TreeItemCollapsibleState.Expanded);
+                            (virtualItem as any).sshPath = nextPath;
+                            (virtualItem as any).connectionLabel = this.connection.label;
+                            virtualItem.contextValue = 'ssh-folder';
+                            virtualItem.iconPath = new vscode.ThemeIcon('folder');
+                            
+                            return resolve([virtualItem]);
+                        }
+                    }
+
+                    vscode.window.showErrorMessage(`Помилка читання директорії ${path}: ${err.message}`);
+                    return resolve([]);
                   }
 
                   const items = list
