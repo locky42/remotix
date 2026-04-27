@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-04-27
+
+### Changed
+
+- The SSH/FTP connection tree now renders the full path (breadcrumbs) from root to the target folder.
+
+- Each path segment is rendered as a separate tree node; only the final folder triggers a server request.
+
+- The root node no longer triggers a server request, creating only the first child node of the path.
+
+- Improved UX for navigating nested folders without unnecessary server requests.
+
+- Updated icons.
+
+- Fixed syntax and stability issues in tree rendering logic.
+
 ## [1.1.0] - 2026-04-06
 
 ### Added
