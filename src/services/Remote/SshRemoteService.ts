@@ -93,6 +93,45 @@ export class SshRemoteService implements RemoteService {
           this.initialPath = await RemotePathHelper.resolveSftpInitialPath(sftp, this.initialPath, (resolvedPath) => {
             LoggerService.log(`[SshRemoteService] Initial directory: ${resolvedPath}`);
           });
+
+          if (path === '.') {
+            const parts = this.initialPath.split('/').filter(p => p);
+            
+            const rootItem = new vscode.TreeItem('/', vscode.TreeItemCollapsibleState.Expanded);
+            (rootItem as any).sshPath = '/';
+            (rootItem as any).connectionLabel = this.connection.label;
+            rootItem.contextValue = 'ssh-folder';
+
+            let currentParent = rootItem;
+            let currentPath = '';
+
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                currentPath += '/' + part;
+                const isLast = i === parts.length - 1;
+
+                const item = new vscode.TreeItem(
+                    part, 
+                    vscode.TreeItemCollapsibleState.Expanded
+                );
+
+                (item as any).sshPath = currentPath;
+                (item as any).connectionLabel = this.connection.label;
+                item.contextValue = 'ssh-folder';
+                item.iconPath = new vscode.ThemeIcon('folder');
+
+                (currentParent as any).children = [item];
+
+                if (!isLast) {
+                    currentParent = item;
+                } else {
+                    delete (item as any).children;
+                    LoggerService.log(`[DEBUG] Target folder reached: ${part}, path: ${currentPath}`);
+                }
+            }
+
+            return [rootItem];
+          }
           
           return await new Promise<vscode.TreeItem[]>((resolve) => {
               LoggerService.log(`[SshRemoteService] Using persistent SFTP for: ${path}`);

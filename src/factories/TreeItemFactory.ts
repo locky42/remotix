@@ -34,9 +34,9 @@ export class TreeItemFactory {
       : new vscode.ThemeIcon('cloud');
     (item as any).contextValue = hasActiveSession ? 'connection-active' : 'connection';
     if (connection.type === 'ssh') {
-      (item as any).sshPath = '/';
+      (item as any).sshPath = '.';
     } else {
-      (item as any).ftpPath = '/';
+      (item as any).ftpPath = '.';
     }
     (item as any).connectionLabel = connection.label;
     return item;

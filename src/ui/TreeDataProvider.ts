@@ -117,6 +117,9 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
   }
 
   async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+    if ((element as any)?.children) {
+        return (element as any).children;
+    }
     const { LoggerService } = await import('../services/LoggerService');
     const elementAny = element as any;
     const elementPath = elementAny?.sshPath || elementAny?.ftpPath || '.';
