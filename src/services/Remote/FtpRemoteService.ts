@@ -179,59 +179,122 @@ export class FtpRemoteService implements RemoteService {
           throw new Error('FTP client not initialized or connection closed');
         }
 
-        let requestPath = path;
         if (path === '.') {
-          requestPath = this.initialPath;
+          const parts = this.initialPath.split('/').filter(p => p);
+          
+          const rootItem = new vscode.TreeItem('/', vscode.TreeItemCollapsibleState.Expanded);
+          (rootItem as any).ftpPath = '/';
+          (rootItem as any).connectionLabel = this.connection.label;
+          rootItem.contextValue = 'ftp-folder';
+          rootItem.iconPath = new vscode.ThemeIcon('folder');
+
+          let currentParent = rootItem;
+          let currentPath = '';
+
+          for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            currentPath += '/' + part;
+            const isLast = i === parts.length - 1;
+
+            const item = new vscode.TreeItem(part, vscode.TreeItemCollapsibleState.Expanded);
+            
+            (item as any).ftpPath = currentPath;
+            (item as any).connectionLabel = this.connection.label;
+            item.contextValue = 'ftp-folder';
+            item.iconPath = new vscode.ThemeIcon('folder');
+
+            (currentParent as any).children = [item];
+
+            if (!isLast) {
+              currentParent = item;
+            } else {
+              delete (item as any).children;
+              LoggerService.log(`[FTP][DEBUG] Virtual path built to: ${currentPath}`);
+            }
+          }
+
+          return [rootItem];
         }
-        requestPath = RemotePathHelper.normalizeAbsolutePath(requestPath);
 
-        const list = await session.list(requestPath);
+        let requestPath = RemotePathHelper.normalizeAbsolutePath(path);
+        let list: any[] = [];
 
-        LoggerService.log(`[FTP][DEBUG] Directory list received (${list.length} items).`);
+        try {
+          list = await session.list(requestPath);
+        } catch (err: any) {
+          if (this.initialPath.startsWith(requestPath) && requestPath !== this.initialPath) {
+            LoggerService.log(`[FTP][DEBUG] Permission denied on path chain, restoring virtual child.`);
+            
+            vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: err.message }));
+
+            const parts = this.initialPath.split('/').filter(p => p);
+            const currentParts = requestPath === '/' ? [] : requestPath.split('/').filter(p => p);
+            const nextPart = parts[currentParts.length];
+
+            if (nextPart) {
+              const nextPath = requestPath === '/' ? `/${nextPart}` : `${requestPath}/${nextPart}`;
+              const virtualItem = new vscode.TreeItem(nextPart, vscode.TreeItemCollapsibleState.Expanded);
+              (virtualItem as any).ftpPath = nextPath;
+              (virtualItem as any).connectionLabel = this.connection.label;
+              virtualItem.contextValue = 'ftp-folder';
+              virtualItem.iconPath = new vscode.ThemeIcon('folder');
+              return [virtualItem];
+            }
+          }
+          throw err;
+        }
 
         const items = list
           .map((item) => ({ ...item, __leafName: this.normalizeRemoteLeafName(item.name) }))
           .filter((item: any) => item.__leafName && item.__leafName !== '.' && item.__leafName !== '..')
           .map((item: any) => {
-          const isFile = item.type === 1;
-          const isDir = item.type === 2;
-          const leafName = item.__leafName as string;
-          
-          const cleanPath = path.endsWith('/') ? path : (path === '.' ? '' : path + '/');
-          const ftpPath = path === '.' ? leafName : cleanPath + leafName;
-          const absoluteFtpPath = RemotePathHelper.normalizeAbsolutePath(ftpPath);
+            const isFile = item.type === 1;
+            const isDir = item.type === 2;
+            const leafName = item.__leafName as string;
+            
+            const absoluteFtpPath = requestPath.endsWith('/') 
+                ? requestPath + leafName 
+                : requestPath + '/' + leafName;
 
-          const treeItem = new vscode.TreeItem(
-            leafName,
-            isDir
-              ? (RemotePathHelper.shouldAutoExpandDirectory(this.initialPath, absoluteFtpPath)
-                ? vscode.TreeItemCollapsibleState.Expanded
-                : vscode.TreeItemCollapsibleState.Collapsed)
-              : vscode.TreeItemCollapsibleState.None
-          );
+            const treeItem = new vscode.TreeItem(
+              leafName,
+              isDir ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+            );
 
-          treeItem.contextValue = isDir ? 'ftp-folder' : (isFile ? 'ftp-file' : 'ftp-unknown');
-          
-          (treeItem as any).ftpPath = absoluteFtpPath;
-          (treeItem as any).connectionLabel = this.connection.label;
-          (treeItem as any).item = item;
+            treeItem.contextValue = isDir ? 'ftp-folder' : (isFile ? 'ftp-file' : 'ftp-unknown');
+            
+            (treeItem as any).ftpPath = absoluteFtpPath;
+            (treeItem as any).connectionLabel = this.connection.label;
 
-          if (isDir) {
-            treeItem.iconPath = new vscode.ThemeIcon('folder');
-          } else if (isFile) {
-            treeItem.iconPath = new vscode.ThemeIcon('file');
-            treeItem.command = {
-              command: 'remotix.editFile',
-              title: LangService.t('openFile'),
-              arguments: [{
-                label: leafName,
-                ftpPath: absoluteFtpPath,
-                connectionLabel: this.connection.label
-              }]
-            };
-          }
+            if (isDir) {
+              treeItem.iconPath = new vscode.ThemeIcon('folder');
+            } else {
+              const ext = leafName.split('.').pop()?.toLowerCase();
+              let iconName = 'file';
+              if (['php', 'js', 'ts', 'html', 'css', 'json'].includes(ext!)) iconName = 'file-code';
+              if (['png', 'jpg', 'svg', 'gif'].includes(ext!)) iconName = 'file-media';
+              if (['zip', 'rar', 'tar', 'gz'].includes(ext!)) iconName = 'file-zip';
+              
+              treeItem.iconPath = new vscode.ThemeIcon(iconName);
+              treeItem.command = {
+                command: 'remotix.editFile',
+                title: LangService.t('openFile'),
+                arguments: [{
+                  label: leafName,
+                  ftpPath: absoluteFtpPath,
+                  connectionLabel: this.connection.label
+                }]
+              };
+            }
 
-          return treeItem;
+            return treeItem;
+          });
+
+        items.sort((a, b) => {
+          const isADir = a.collapsibleState !== vscode.TreeItemCollapsibleState.None;
+          const isBDir = b.collapsibleState !== vscode.TreeItemCollapsibleState.None;
+          if (isADir !== isBDir) return isADir ? -1 : 1;
+          return (a.label as string).localeCompare(b.label as string, 'uk');
         });
 
         LoggerService.log(`[FTP][DEBUG] Returning ${items.length} tree items. EXIT`);
