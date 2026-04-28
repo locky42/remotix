@@ -241,6 +241,14 @@ export function registerConnectionCommands(saveConnection: Function) {
           if (uris && uris.length > 0) {
             panel.webview.postMessage({ command: 'setFile', path: uris[0].fsPath });
           }
+        } else if (message.command === 'copyPassword') {
+          const value = String(message.value || '');
+          if (value) {
+            await vscode.env.clipboard.writeText(value);
+            vscode.window.showInformationMessage(LangService.t('passwordCopied'));
+          }
+        } else if (message.command === 'passwordCopied') {
+          vscode.window.showInformationMessage(LangService.t('passwordCopied'));
         }
       },
       undefined,
@@ -289,6 +297,14 @@ export function registerConnectionCommands(saveConnection: Function) {
               panel.webview.postMessage({ command: 'setFile', path: uris[0].fsPath });
             }
           });
+        } else if (message.command === 'copyPassword') {
+          const value = String(message.value || '');
+          if (value) {
+            await vscode.env.clipboard.writeText(value);
+            vscode.window.showInformationMessage(LangService.t('passwordCopied'));
+          }
+        } else if (message.command === 'passwordCopied') {
+          vscode.window.showInformationMessage(LangService.t('passwordCopied'));
         }
       },
       undefined,

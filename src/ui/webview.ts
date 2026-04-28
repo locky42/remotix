@@ -21,6 +21,9 @@ export function getAddConnectionHtml(init?: Partial<ConnectionItem>): string {
     html = html.replace(/\{\{USER\}\}/g, LangService.t('user'));
     html = html.replace(/\{\{AUTH_METHOD_LABEL\}\}/g, LangService.t('authMethodLabel'));
     html = html.replace(/\{\{PASSWORD\}\}/g, LangService.t('password'));
+    html = html.replace(/\{\{SHOW_PASSWORD\}\}/g, LangService.t('showPassword'));
+    html = html.replace(/\{\{HIDE_PASSWORD\}\}/g, LangService.t('hidePassword'));
+    html = html.replace(/\{\{COPY_PASSWORD\}\}/g, LangService.t('copyPassword'));
     html = html.replace(/\{\{SSH_KEY\}\}/g, LangService.t('sshKey'));
     html = html.replace(/\{\{PASSWORD_SELECTED\}\}/g, init?.authMethod === 'password' ? 'selected' : '');
     html = html.replace(/\{\{KEY_SELECTED\}\}/g, init?.authMethod === 'privateKey' ? 'selected' : '');

@@ -54,6 +54,25 @@
       justify-content: center;
     }
     .checkbox-row { display: flex; align-items: center; margin-bottom: 10px; }
+    .password-row {
+      display: flex;
+      gap: 4px;
+      align-items: flex-end;
+    }
+    .password-row label { margin: 0; flex: 1; }
+    .password-row input {
+      margin-top: 2px;
+      height: 32px;
+    }
+    .password-row button {
+      margin-top: 0;
+      padding: 0 12px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -83,7 +102,11 @@
         </select>
       </label>
     </div>
-    <div class="row" id="passwordRow"><label>{{PASSWORD}}<input id="password" name="password" type="password" value="{{PASSWORD_VALUE}}"></label></div>
+    <div class="row password-row" id="passwordRow">
+      <label>{{PASSWORD}}<input id="password" name="password" type="password" value="{{PASSWORD_VALUE}}"></label>
+      <button type="button" id="togglePasswordBtn" title="{{SHOW_PASSWORD}}">{{SHOW_PASSWORD}}</button>
+      <button type="button" id="copyPasswordBtn" title="{{COPY_PASSWORD}}">{{COPY_PASSWORD}}</button>
+    </div>
     <div class="row file-row" id="authFileRow">
       <label style="flex:1">{{AUTH_FILE_LABEL}}
         <input id="authFile" name="authFile" placeholder="{{AUTH_FILE_PLACEHOLDER}}" value="{{AUTH_FILE_VALUE}}">
@@ -103,6 +126,11 @@
     const authMethodSelect = document.getElementById('authMethod');
     const pickFileBtn = document.getElementById('pickFileBtn');
     const authFileInput = document.getElementById('authFile');
+    const passwordInput = document.getElementById('password');
+    const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+    const copyPasswordBtn = document.getElementById('copyPasswordBtn');
+    const showPasswordLabel = '{{SHOW_PASSWORD}}';
+    const hidePasswordLabel = '{{HIDE_PASSWORD}}';
     function updateFields() {
       if (typeSelect.value === 'ftp') {
         authMethodRow.style.display = 'none';
@@ -132,6 +160,23 @@
     };
     pickFileBtn.onclick = () => {
       vscode.postMessage({ command: 'pickFile' });
+    };
+    togglePasswordBtn.onclick = () => {
+      const isPassword = passwordInput.type === 'password';
+      passwordInput.type = isPassword ? 'text' : 'password';
+      togglePasswordBtn.textContent = isPassword ? hidePasswordLabel : showPasswordLabel;
+      togglePasswordBtn.title = togglePasswordBtn.textContent;
+    };
+    copyPasswordBtn.onclick = async () => {
+      if (!passwordInput.value) {
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(passwordInput.value);
+        vscode.postMessage({ command: 'passwordCopied' });
+      } catch {
+        vscode.postMessage({ command: 'copyPassword', value: passwordInput.value });
+      }
     };
     window.addEventListener('message', event => {
       if (event.data.command === 'setFile') {
