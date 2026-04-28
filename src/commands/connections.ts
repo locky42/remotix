@@ -389,7 +389,8 @@ export function registerConnectionCommands(saveConnection: Function) {
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('remotix.editConnection', async (item: vscode.TreeItem) => {
-    const connection = treeDataProvider.getConnectionByLabel(item.label as string);
+    const label = (item as any).connectionLabel || String(item.label);
+    const connection = treeDataProvider.getConnectionByLabel(label);
     if (!connection) return;
     const panel = vscode.window.createWebviewPanel(
       'remotixEditConnection',
@@ -445,7 +446,7 @@ export function registerConnectionCommands(saveConnection: Function) {
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('remotix.deleteConnection', async (item: vscode.TreeItem) => {
-    const label = item.label as string;
+    const label = (item as any).connectionLabel || String(item.label);
     const connection = treeDataProvider.getConnectionByLabel(label);
     if (!connection) return;
     const confirm = await vscode.window.showWarningMessage(

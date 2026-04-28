@@ -14,6 +14,11 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
   readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined> = this._onDidChangeTreeData.event;
   private connectionManager: ConnectionManager;
   private elementIndex: Map<string, vscode.TreeItem> = new Map();
+  private suppressConnectionExpand = false;
+  private suppressConnectionExpandTimeout?: ReturnType<typeof setTimeout>;
+  private previewConnectionOrder: string[] | null = null;
+  private isReordering = false;
+  private suppressOnChangeCallback = false;
 
   readonly dragAndDropController: DragAndDropController;
   private itemFactory: TreeItemFactory;
@@ -22,7 +27,12 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
   constructor() {
     this.connectionManager = Container.get('connectionManager') as ConnectionManager;
-    this.connectionManager.setOnChange(() => this._onDidChangeTreeData.fire(undefined));
+    this.connectionManager.setOnChange((type?: string) => {
+      // Skip tree update if we're in reorder mode (prevents tree update when reorder() fires onChange)
+      if (this.suppressOnChangeCallback) return;
+      // Fire tree change (type is just metadata)
+      this._onDidChangeTreeData.fire(undefined);
+    });
     this.itemFactory = new TreeItemFactory();
     // Pass the TreeDataProvider itself to DragAndDropController
     this.dragAndDropController = new DragAndDropController(this.connectionManager, () => this._onDidChangeTreeData.fire(undefined), this);
@@ -35,6 +45,10 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
 
   get dropMimeTypes(): string[] {
     return this.dragAndDropController.dropMimeTypes;
+  }
+
+  isInReorderMode(): boolean {
+    return this.isReordering;
   }
 
   clearRemoteServiceCache(label: string) {
@@ -73,6 +87,11 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
     if (element.contextValue === 'connection' || element.contextValue === 'connection-active') {
       const label = (element as any).connectionLabel || String(element.label);
       treeItem.contextValue = SessionProvider.hasSession(label) ? 'connection-active' : 'connection';
+      if (this.suppressConnectionExpand) {
+        treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
+        // Disable command click during drag-reorder
+        treeItem.command = undefined;
+      }
     }
 
     return treeItem;
@@ -112,6 +131,41 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
     this._onDidChangeTreeData.fire(undefined);
   }
 
+  public setConnectionReorderMode(active: boolean): void {
+    this.suppressConnectionExpand = active;
+    this.isReordering = active;
+    this.suppressOnChangeCallback = active; // Suppress onChange callback during reorder
+    
+    if (this.suppressConnectionExpandTimeout) {
+      clearTimeout(this.suppressConnectionExpandTimeout);
+      this.suppressConnectionExpandTimeout = undefined;
+    }
+
+    if (active) {
+      // Safety net for canceled drags where drop callback is not fired.
+      this.suppressConnectionExpandTimeout = setTimeout(() => {
+        this.suppressConnectionExpand = false;
+        this.isReordering = false;
+        this.suppressOnChangeCallback = false;
+        this.previewConnectionOrder = null;
+        this._onDidChangeTreeData.fire(undefined);
+      }, 10000);
+      // Don't fire tree update when entering reorder mode - prevents unnecessary reconnects during drag
+      return;
+    }
+
+    // Fire tree update only when exiting reorder mode
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  public setPreviewConnectionOrder(order: string[] | null): void {
+    this.previewConnectionOrder = order;
+    // Only fire update if setting new preview, not when clearing
+    if (order !== null) {
+      this._onDidChangeTreeData.fire(undefined);
+    }
+  }
+
 refresh(element?: vscode.TreeItem) {
   if (element) {
     const elementAny = element as any;
@@ -146,7 +200,22 @@ refresh(element?: vscode.TreeItem) {
     if (!element) {
       LoggerService.log('[TreeDataProvider][DEBUG] No element, returning root items');
       const addItem = this.itemFactory.createAddConnectionItem();
-      const connectionItems = this.connectionManager.getAll().map(conn => {
+      let connections = this.connectionManager.getAll();
+      
+      // Apply preview order if active
+      if (this.previewConnectionOrder) {
+        const connMap = new Map(connections.map(c => [c.label, c]));
+        const previewConns: ConnectionItem[] = [];
+        for (const label of this.previewConnectionOrder) {
+          const conn = connMap.get(label);
+          if (conn) {
+            previewConns.push(conn);
+          }
+        }
+        connections = previewConns;
+      }
+      
+      const connectionItems = connections.map(conn => {
         const item = this.itemFactory.createConnectionTreeItem(conn);
         (item as any).connectionLabel = conn.label;
         this.elementIndex.set(this.buildElementKey(conn.label, 'connection', '.'), item);
@@ -159,8 +228,20 @@ refresh(element?: vscode.TreeItem) {
       return [addItem, ...connectionItems];
     }
     if (element && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active' || (element as any).contextValue === 'ssh-folder' || (element as any).contextValue === 'ftp-folder')) {
+      if (this.suppressConnectionExpand && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active')) {
+        LoggerService.log('[TreeDataProvider][DEBUG] Connection expand suppressed during reorder drag');
+        return [];
+      }
+
       const label = (element as any).connectionLabel || element.label;
       LoggerService.log(`[TreeDataProvider][DEBUG] label: ${label}`);
+      
+      // Don't connect during reorder - applies to all elements
+      if (this.isReordering) {
+        LoggerService.log(`[TreeDataProvider][DEBUG] Skipping connection during reorder for ${label}`);
+        return [];
+      }
+      
       if (SessionProvider.isManuallyClosed(String(label))) {
         LoggerService.log(`[TreeDataProvider][DEBUG] Connection ${label} was manually closed, returning [] without reconnect`);
         LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (manually closed)');

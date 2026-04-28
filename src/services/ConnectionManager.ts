@@ -3,14 +3,14 @@ import { ConfigService } from './ConfigService';
 
 export class ConnectionManager {
   private connections: ConnectionItem[] = [];
-  private onChange: () => void;
+  private onChange: (type?: string) => void;
 
-  constructor(onChange: () => void = () => {}) {
+  constructor(onChange: (type?: string) => void = () => {}) {
     this.onChange = onChange;
     this.load();
   }
 
-  setOnChange(onChange: () => void) {
+  setOnChange(onChange: (type?: string) => void) {
     this.onChange = onChange;
   }
 
@@ -45,12 +45,19 @@ export class ConnectionManager {
   }
 
   reorder(draggedLabels: string[], targetLabel: string) {
+    // Self-drop guard: if all dragged items are the same as target, nothing to do
+    if (draggedLabels.length === 1 && draggedLabels[0] === targetLabel) return;
+
     const dragged = this.connections.filter(c => draggedLabels.includes(c.label));
     this.connections = this.connections.filter(c => !draggedLabels.includes(c.label));
     const idx = this.connections.findIndex(c => c.label === targetLabel);
     if (idx !== -1) {
       this.connections.splice(idx, 0, ...dragged);
-      this.onChange();
+    } else {
+      // Target not found - append dragged at end to avoid losing connections
+      this.connections.push(...dragged);
     }
+    ConfigService.saveGlobalConfig({ connections: this.connections });
+    // Don't fire onChange here - caller will do it after reorder mode is cleared
   }
 }

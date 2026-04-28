@@ -447,17 +447,21 @@ export class SshRemoteService implements RemoteService {
                                 const baseIcon = this.getBaseIconForSshEntry(isDir, f.filename);
                                 item.iconPath = PermissionIconHelper.createPermissionIcon(baseIcon, permissionStatus);
 
-                          if (!isDir) {
+                            if (!isDir) {
+                              // Set resourceUri for proper icon alignment
+                              try {
+                                item.resourceUri = vscode.Uri.file('/ssh/' + encodeURIComponent(this.connection.label) + fullPath);
+                              } catch {}
                               item.command = {
-                                  command: 'remotixView.itemClick',
-                                  title: LangService.t('openFile'),
-                                  arguments: [{
-                                      label: f.filename,
-                                      sshPath: fullPath,
-                                      connectionLabel: this.connection.label
-                                  }]
+                                command: 'remotixView.itemClick',
+                                title: LangService.t('openFile'),
+                                arguments: [{
+                                  label: f.filename,
+                                  sshPath: fullPath,
+                                  connectionLabel: this.connection.label
+                                }]
                               };
-                          }
+                            }
                           return item;
                       });
 

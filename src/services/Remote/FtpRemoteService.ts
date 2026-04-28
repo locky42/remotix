@@ -584,6 +584,10 @@ export class FtpRemoteService implements RemoteService {
             if (isDir) {
               treeItem.iconPath = new vscode.ThemeIcon('folder');
             } else {
+              // Set resourceUri for proper icon alignment
+              try {
+                treeItem.resourceUri = vscode.Uri.file('/ftp/' + encodeURIComponent(this.connection.label) + absoluteFtpPath);
+              } catch {}
               const ext = leafName.split('.').pop()?.toLowerCase();
               let iconName = 'file';
               if (['php', 'js', 'ts', 'html', 'css', 'json'].includes(ext!)) iconName = 'file-code';

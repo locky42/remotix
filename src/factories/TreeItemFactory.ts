@@ -28,8 +28,9 @@ export class TreeItemFactory {
       desc = `${connection.user || ''}@${connection.detail || ''}:${connection.port || ''}`;
       item.tooltip = `${LangService.t('editConnection')}: ${connection.user || ''}@${connection.detail || ''}:${connection.port || ''}`;
     }
-    item.description = desc;
-    item.iconPath = connection.type === 'ssh'
+    item.description = `${connection.type.toUpperCase()} • ${desc}`;
+    item.tooltip = `${item.tooltip}\n${LangService.t('dragToReorderConnections')}`;
+    item.iconPath = connection.type === 'ssh' 
       ? new vscode.ThemeIcon('terminal')
       : new vscode.ThemeIcon('cloud');
     (item as any).contextValue = hasActiveSession ? 'connection-active' : 'connection';
