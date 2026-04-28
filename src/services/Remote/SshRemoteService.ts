@@ -3,14 +3,14 @@ import * as vscode from 'vscode';
 import { Container } from '../Container';
 import { Client as SshClient } from 'ssh2';
 import { LangService } from '../LangService';
-import { ConnectionItem } from '../../types';
 import { RemoteService } from './RemoteService';
 import { ConfigService } from '../ConfigService';
 import { LoggerService } from '../LoggerService';
 import { SessionProvider } from '../SessionProvider';
 import { TreeDataProvider } from '../../ui/TreeDataProvider';
 import { RemotePathHelper } from '../../helpers/RemotePathHelper';
-import { PermissionIconHelper, RemoteBaseIcon } from '../../helpers/PermissionIconHelper';
+import { PermissionIconHelper } from '../../helpers/PermissionIconHelper';
+import { ConnectionItem, PermissionApplyTarget, PermissionChangeOptions, RemoteBaseIcon } from '../../types';
 
 export class SshRemoteService implements RemoteService {
   private connection: ConnectionItem;
@@ -112,6 +112,34 @@ export class SshRemoteService implements RemoteService {
     if (['zip', 'rar', 'tar', 'gz'].includes(ext || '')) return 'file-zip';
     if (['cert', 'key', 'pem', 'cer'].includes(ext || '')) return 'lock-file';
     return 'file';
+  }
+
+  private parsePermissionTripletToOctal(triplet: string): number {
+    let value = 0;
+    if (triplet[0] === 'r') value += 4;
+    if (triplet[1] === 'w') value += 2;
+    if (triplet[2] === 'x' || triplet[2] === 's' || triplet[2] === 't') value += 1;
+    return value;
+  }
+
+  private detectModeFromSshEntry(fileEntry: any): string | undefined {
+    const mode = Number(fileEntry?.attrs?.mode);
+    if (Number.isFinite(mode)) {
+      return (mode & 0o777).toString(8).padStart(3, '0');
+    }
+
+    const longname = String(fileEntry?.longname || '');
+    const parts = longname.trim().split(/\s+/);
+    const permBlock = parts[0] || '';
+    if (permBlock.length < 10) {
+      return undefined;
+    }
+
+    const perms = permBlock.slice(1, 10);
+    const owner = this.parsePermissionTripletToOctal(perms.slice(0, 3));
+    const group = this.parsePermissionTripletToOctal(perms.slice(3, 6));
+    const world = this.parsePermissionTripletToOctal(perms.slice(6, 9));
+    return `${owner}${group}${world}`;
   }
 
   public async connect(): Promise<SshClient> {
@@ -252,6 +280,7 @@ export class SshRemoteService implements RemoteService {
 
                           (item as any).sshPath = fullPath;
                           (item as any).connectionLabel = this.connection.label;
+                          (item as any).permissionMode = this.detectModeFromSshEntry(f);
                           item.contextValue = isDir ? 'ssh-folder' : 'ssh-file';
 
                                 const permissionStatus = this.getPermissionStatusForSshEntry(f);
@@ -998,6 +1027,171 @@ export class SshRemoteService implements RemoteService {
     return `'${String(value || '').replace(/'/g, `'"'"'`)}'`;
   }
 
+  private normalizePermissionMode(rawMode: string): string | undefined {
+    const value = String(rawMode || '').trim();
+    if (!/^[0-7]{3,4}$/.test(value)) {
+      return undefined;
+    }
+    return value;
+  }
+
+  private async runShellCommand(command: string, timeoutMs: number = 120000): Promise<void> {
+    const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
+    if (!session) {
+      throw new Error('SSH session is not available');
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      session.exec(command, (err: Error | undefined, stream: any) => {
+        if (err) {
+          return reject(err);
+        }
+
+        let settled = false;
+        let stderr = '';
+
+        const finalize = (error?: Error): void => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timeoutHandle);
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        };
+
+        const timeoutHandle = setTimeout(() => {
+          const timeoutError = new Error(`Command timeout after ${timeoutMs}ms`);
+          try {
+            if (typeof stream?.close === 'function') {
+              stream.close();
+            }
+          } catch {
+          }
+          finalize(timeoutError);
+        }, timeoutMs);
+
+        if (stream?.stderr) {
+          stream.stderr.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString();
+          });
+        }
+
+        const handleExit = (code: number | null): void => {
+          if (code === 0) {
+            finalize();
+            return;
+          }
+          const errText = stderr.trim() || `Command exited with code ${String(code)}`;
+          finalize(new Error(errText));
+        };
+
+        stream.on('exit', (code: number | null) => handleExit(code));
+        stream.on('close', (code: number | null) => handleExit(code));
+        stream.on('error', (streamErr: Error) => finalize(streamErr));
+      });
+    });
+  }
+
+  async changePermissionsWithDialogs(item: any): Promise<void> {
+    const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
+    const remotePath = String(item?.sshPath || item?.ftpPath || '').trim();
+    if (!remotePath) {
+      vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
+      return;
+    }
+
+    const isDirectory = item?.contextValue === 'ssh-folder' || item?.contextValue === 'ftp-folder';
+    const currentMode = this.normalizePermissionMode(String(item?.permissionMode || ''));
+    const modeInput = await vscode.window.showInputBox({
+      prompt: LangService.t('enterPermissionMode'),
+      placeHolder: LangService.t('permissionModePlaceholder'),
+      value: currentMode || (isDirectory ? '755' : '644'),
+      validateInput: (value) => this.normalizePermissionMode(value)
+        ? undefined
+        : LangService.t('invalidPermissionMode')
+    });
+    if (!modeInput) {
+      return;
+    }
+
+    const mode = this.normalizePermissionMode(modeInput);
+    if (!mode) {
+      vscode.window.showErrorMessage(LangService.t('invalidPermissionMode'));
+      return;
+    }
+
+    let recursive = false;
+    let applyTo: PermissionApplyTarget = 'all';
+
+    if (isDirectory) {
+      const recursiveChoice = await vscode.window.showQuickPick(
+        [
+          { label: LangService.t('permissionsApplyCurrentOnly'), value: 'no' },
+          { label: LangService.t('permissionsApplyRecursive'), value: 'yes' }
+        ],
+        { placeHolder: LangService.t('choosePermissionsApplyMode') }
+      );
+      if (!recursiveChoice) {
+        return;
+      }
+      recursive = recursiveChoice.value === 'yes';
+    }
+
+    if (recursive) {
+      const targetChoice = await vscode.window.showQuickPick(
+        [
+          { label: LangService.t('permissionsTargetAll'), value: 'all' },
+          { label: LangService.t('permissionsTargetFilesOnly'), value: 'files' },
+          { label: LangService.t('permissionsTargetDirectoriesOnly'), value: 'directories' }
+        ],
+        { placeHolder: LangService.t('choosePermissionsTarget') }
+      );
+      if (!targetChoice) {
+        return;
+      }
+      applyTo = targetChoice.value as PermissionApplyTarget;
+    }
+
+    try {
+      await this.changePermissions(remotePath, { mode, recursive, applyTo });
+      const refreshPath = isDirectory ? remotePath : this.getParentRemotePath(remotePath);
+      this.refreshFolder(treeDataProvider, refreshPath);
+      vscode.window.showInformationMessage(LangService.t('permissionsChanged', { path: remotePath, mode }));
+    } catch (error: any) {
+      vscode.window.showErrorMessage(LangService.t('changePermissionsFailed', {
+        error: error instanceof Error ? error.message : String(error)
+      }));
+    }
+  }
+
+  async changePermissions(remotePath: string, options: PermissionChangeOptions): Promise<void> {
+    const mode = this.normalizePermissionMode(options.mode);
+    if (!mode) {
+      throw new Error(LangService.t('invalidPermissionMode'));
+    }
+
+    const escapedPath = this.quoteForShell(remotePath);
+    let command = `chmod ${mode} ${escapedPath}`;
+
+    if (options.recursive) {
+      if (options.applyTo === 'all') {
+        command = `chmod -R ${mode} ${escapedPath}`;
+      } else if (options.applyTo === 'files') {
+        command = `find ${escapedPath} -type f -exec chmod ${mode} {} +`;
+      } else {
+        command = `find ${escapedPath} -type d -exec chmod ${mode} {} +`;
+      }
+    }
+
+    LoggerService.log(`[SSH][CHMOD] START mode=${mode} recursive=${String(options.recursive)} target=${options.applyTo} path=${remotePath}`);
+    await this.runShellCommand(command, 180000);
+    LoggerService.log(`[SSH][CHMOD] END success path=${remotePath}`);
+  }
+
   async copyItem(sourceRemotePath: string, targetRemotePath: string, isDirectory: boolean): Promise<void> {
     const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
 
@@ -1250,5 +1444,5 @@ export class SshRemoteService implements RemoteService {
             resolve(sftp);
         });
     });
-}
+  }
 }

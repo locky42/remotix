@@ -255,6 +255,25 @@ export function registerFileFolderCommands() {
     await service.renameWithDialogs?.(item);
   }));
 
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.changePermissions', async (item: any) => {
+    const connection = resolveConnectionItem(item);
+    if (!connection) {
+      vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
+      return;
+    }
+    const service = await (Container.get('remoteServiceProvider') as RemoteServiceProvider).getRemoteService(connection.label) as RemoteService;
+    if (!service) {
+      return;
+    }
+
+    if (!service.changePermissionsWithDialogs) {
+      vscode.window.showErrorMessage(LangService.t('changePermissionsNotSupported'));
+      return;
+    }
+
+    await service.changePermissionsWithDialogs(item);
+  }));
+
   context.subscriptions.push(vscode.commands.registerCommand('remotix.createFolder', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {

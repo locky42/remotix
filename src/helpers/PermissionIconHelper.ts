@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
-
-export type PermissionStatus = 'no-read' | 'read-only' | undefined;
-export type RemoteBaseIcon = 'folder' | 'file' | 'file-code' | 'file-media' | 'file-zip' | 'lock-file';
+import { PermissionStatus, RemoteBaseIcon } from '../types';
 
 export class PermissionIconHelper {
   static createPermissionIcon(baseIcon: RemoteBaseIcon, status: PermissionStatus): vscode.Uri | vscode.ThemeIcon {

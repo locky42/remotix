@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { PermissionChangeOptions } from '../../types';
 
 export interface RemoteService {
   connect(): Promise<any>;
@@ -24,6 +25,9 @@ export interface RemoteService {
 
   renameWithDialogs?(item: any): Promise<void>;
   rename(oldRemotePath: string, newRemotePath: string): Promise<void>;
+
+  changePermissionsWithDialogs?(item: any): Promise<void>;
+  changePermissions?(remotePath: string, options: PermissionChangeOptions): Promise<void>;
 
   copyItem?(sourceRemotePath: string, targetRemotePath: string, isDirectory: boolean): Promise<void>;
   

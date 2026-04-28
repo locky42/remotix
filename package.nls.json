@@ -10,6 +10,7 @@
   "command.upload": "Upload",
   "command.download": "Download",
   "command.rename": "Rename",
+  "command.changePermissions": "Change Permissions",
   "command.deleteFile": "Delete",
   "command.copyPath": "Copy Path",
   "command.importSshConfig": "Remotix: Import from SSH config",

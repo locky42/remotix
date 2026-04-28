@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { Container } from '../Container';
-import { ConnectionItem } from '../../types';
 import { LangService } from '../LangService';
 import { RemoteService } from './RemoteService';
 import { Client as FtpClient } from 'basic-ftp';
@@ -9,6 +8,7 @@ import { ConfigService } from '../ConfigService';
 import { SessionProvider } from '../SessionProvider';
 import { TreeDataProvider } from '../../ui/TreeDataProvider';
 import { RemotePathHelper } from '../../helpers/RemotePathHelper';
+import { ConnectionItem, PermissionApplyTarget, PermissionChangeOptions } from '../../types';
 
 // Simple async mutex for serializing FTP operations
 class AsyncMutex {
@@ -98,6 +98,230 @@ export class FtpRemoteService implements RemoteService {
     const configured = vscode.workspace.getConfiguration('remotix').get<number>('ftpDeleteFileConcurrency', 4);
     const value = Number.isFinite(configured as number) ? Number(configured) : 4;
     return Math.max(1, Math.min(10, Math.floor(value)));
+  }
+
+  private normalizePermissionMode(rawMode: string): string | undefined {
+    const value = String(rawMode || '').trim();
+    if (!/^[0-7]{3,4}$/.test(value)) {
+      return undefined;
+    }
+    return value;
+  }
+
+  private parsePermissionTripletToOctal(triplet: string): number {
+    let value = 0;
+    if (triplet[0] === 'r') value += 4;
+    if (triplet[1] === 'w') value += 2;
+    if (triplet[2] === 'x' || triplet[2] === 's' || triplet[2] === 't') value += 1;
+    return value;
+  }
+
+  private detectModeFromFtpEntry(fileEntry: any): string | undefined {
+    const perms = fileEntry?.permissions;
+    if (perms && typeof perms === 'object') {
+      const user = Number(perms.user);
+      const group = Number(perms.group);
+      const world = Number(perms.world);
+      if (Number.isFinite(user) && Number.isFinite(group) && Number.isFinite(world)) {
+        return `${user}${group}${world}`;
+      }
+    }
+
+    if (typeof perms === 'string' && perms.length >= 9) {
+      const block = perms.length >= 10 ? perms.slice(-9) : perms;
+      const owner = this.parsePermissionTripletToOctal(block.slice(0, 3));
+      const group = this.parsePermissionTripletToOctal(block.slice(3, 6));
+      const world = this.parsePermissionTripletToOctal(block.slice(6, 9));
+      return `${owner}${group}${world}`;
+    }
+
+    return undefined;
+  }
+
+  private async applyFtpChmod(client: FtpClient, remotePath: string, mode: string): Promise<void> {
+    const absolutePath = this.toAbsoluteRemotePath(remotePath);
+    let lastError: any;
+    const primaryCommand = `SITE CHMOD ${mode} ${absolutePath}`;
+    try {
+      LoggerService.log(`[FTP][CHMOD] TRY command="${primaryCommand}"`);
+      await client.send(primaryCommand);
+      LoggerService.log(`[FTP][CHMOD] OK command="${primaryCommand}"`);
+      return;
+    } catch (err: any) {
+      lastError = err;
+      LoggerService.log(`[FTP][CHMOD] FAIL command="${primaryCommand}" error=${err?.message || String(err)}`);
+    }
+
+    // Fallback for servers that only allow chmod by leaf name in parent cwd.
+    const parentPath = this.getParentRemotePath(absolutePath);
+    const leafName = this.normalizeRemoteLeafName(absolutePath);
+    if (leafName) {
+      const previousDir = await client.pwd().catch(() => '/');
+      try {
+        LoggerService.log(`[FTP][CHMOD] TRY cd parent for leaf chmod parent=${parentPath} leaf=${leafName}`);
+        await client.cd(parentPath);
+        const fallbackCommand = `SITE CHMOD ${mode} ${leafName}`;
+        LoggerService.log(`[FTP][CHMOD] TRY command="${fallbackCommand}" (cwd=${parentPath})`);
+        await client.send(fallbackCommand);
+        LoggerService.log(`[FTP][CHMOD] OK command="${fallbackCommand}" (cwd=${parentPath})`);
+        return;
+      } catch (err: any) {
+        lastError = err;
+        LoggerService.log(`[FTP][CHMOD] FAIL fallback parent=${parentPath} leaf=${leafName} error=${err?.message || String(err)}`);
+      } finally {
+        try {
+          await client.cd(previousDir);
+        } catch {
+        }
+      }
+    }
+
+    const lastMessage = String(lastError?.message || '');
+    if (/could not change perms|\b550\b/i.test(lastMessage)) {
+      throw new Error(LangService.t('ftpChmodDeniedByServer', { path: absolutePath }));
+    }
+
+    throw lastError;
+  }
+
+  private async chmodRecursiveFtp(
+    client: FtpClient,
+    remoteDir: string,
+    mode: string,
+    applyTo: PermissionApplyTarget,
+    stats: { files: number; dirs: number }
+  ): Promise<void> {
+    const absoluteDir = this.toAbsoluteRemotePath(remoteDir);
+    const list = await client.list(absoluteDir);
+
+    for (const entry of list) {
+      const leafName = this.normalizeRemoteLeafName((entry as any)?.name);
+      if (!leafName || leafName === '.' || leafName === '..') {
+        continue;
+      }
+
+      const fullPath = absoluteDir.endsWith('/') ? `${absoluteDir}${leafName}` : `${absoluteDir}/${leafName}`;
+      const isDirectory = (entry as any)?.type === 2;
+      const isFile = (entry as any)?.type === 1;
+
+      if (isDirectory) {
+        if (applyTo !== 'files') {
+          await this.applyFtpChmod(client, fullPath, mode);
+          stats.dirs += 1;
+        }
+        await this.chmodRecursiveFtp(client, fullPath, mode, applyTo, stats);
+        continue;
+      }
+
+      if (isFile && applyTo !== 'directories') {
+        await this.applyFtpChmod(client, fullPath, mode);
+        stats.files += 1;
+      }
+    }
+  }
+
+  async changePermissionsWithDialogs(item: any): Promise<void> {
+    const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
+    const remotePath = String(item?.ftpPath || item?.sshPath || '').trim();
+    if (!remotePath) {
+      vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
+      return;
+    }
+
+    const isDirectory = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder';
+    const currentMode = this.normalizePermissionMode(String(item?.permissionMode || ''));
+    const modeInput = await vscode.window.showInputBox({
+      prompt: LangService.t('enterPermissionMode'),
+      placeHolder: LangService.t('permissionModePlaceholder'),
+      value: currentMode || (isDirectory ? '755' : '644'),
+      validateInput: (value) => this.normalizePermissionMode(value)
+        ? undefined
+        : LangService.t('invalidPermissionMode')
+    });
+    if (!modeInput) {
+      return;
+    }
+
+    const mode = this.normalizePermissionMode(modeInput);
+    if (!mode) {
+      vscode.window.showErrorMessage(LangService.t('invalidPermissionMode'));
+      return;
+    }
+
+    let recursive = false;
+    let applyTo: PermissionApplyTarget = 'all';
+
+    if (isDirectory) {
+      const recursiveChoice = await vscode.window.showQuickPick(
+        [
+          { label: LangService.t('permissionsApplyCurrentOnly'), value: 'no' },
+          { label: LangService.t('permissionsApplyRecursive'), value: 'yes' }
+        ],
+        { placeHolder: LangService.t('choosePermissionsApplyMode') }
+      );
+      if (!recursiveChoice) {
+        return;
+      }
+      recursive = recursiveChoice.value === 'yes';
+    }
+
+    if (recursive) {
+      const targetChoice = await vscode.window.showQuickPick(
+        [
+          { label: LangService.t('permissionsTargetAll'), value: 'all' },
+          { label: LangService.t('permissionsTargetFilesOnly'), value: 'files' },
+          { label: LangService.t('permissionsTargetDirectoriesOnly'), value: 'directories' }
+        ],
+        { placeHolder: LangService.t('choosePermissionsTarget') }
+      );
+      if (!targetChoice) {
+        return;
+      }
+      applyTo = targetChoice.value as PermissionApplyTarget;
+    }
+
+    try {
+      await this.changePermissions(remotePath, { mode, recursive, applyTo });
+      const refreshPath = isDirectory ? remotePath : this.getParentRemotePath(remotePath);
+      this.refreshFolder(treeDataProvider, refreshPath);
+      vscode.window.showInformationMessage(LangService.t('permissionsChanged', { path: remotePath, mode }));
+    } catch (error: any) {
+      vscode.window.showErrorMessage(LangService.t('changePermissionsFailed', {
+        error: error instanceof Error ? error.message : String(error)
+      }));
+    }
+  }
+
+  async changePermissions(remotePath: string, options: PermissionChangeOptions): Promise<void> {
+    const mode = this.normalizePermissionMode(options.mode);
+    if (!mode) {
+      throw new Error(LangService.t('invalidPermissionMode'));
+    }
+
+    await this._mutex.acquire(async () => {
+      const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
+      if (!session || (session as any).closed) {
+        throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
+      }
+
+      const absolutePath = this.toAbsoluteRemotePath(remotePath);
+      LoggerService.log(`[FTP][CHMOD] START mode=${mode} recursive=${String(options.recursive)} target=${options.applyTo} path=${absolutePath}`);
+
+      if (!options.recursive) {
+        await this.applyFtpChmod(session, absolutePath, mode);
+        LoggerService.log(`[FTP][CHMOD] END success path=${absolutePath}`);
+        return;
+      }
+
+      const stats = { files: 0, dirs: 0 };
+      if (options.applyTo !== 'files') {
+        await this.applyFtpChmod(session, absolutePath, mode);
+        stats.dirs += 1;
+      }
+
+      await this.chmodRecursiveFtp(session, absolutePath, mode, options.applyTo, stats);
+      LoggerService.log(`[FTP][CHMOD] END success path=${absolutePath} stats(files=${stats.files}, dirs=${stats.dirs})`);
+    });
   }
 
   private async ensurePasswordLoaded(): Promise<void> {
@@ -274,6 +498,7 @@ export class FtpRemoteService implements RemoteService {
             
             (treeItem as any).ftpPath = absoluteFtpPath;
             (treeItem as any).connectionLabel = this.connection.label;
+            (treeItem as any).permissionMode = this.detectModeFromFtpEntry(item);
 
             if (isDir) {
               treeItem.iconPath = new vscode.ThemeIcon('folder');

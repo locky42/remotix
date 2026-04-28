@@ -1,8 +1,7 @@
 import { Client as SshClient } from 'ssh2';
 import { Client as FtpClient } from 'basic-ftp';
 import { LoggerService } from './LoggerService';
-
-export type RemoteSession = SshClient | FtpClient;
+import { RemoteSession } from '../types';
 
 export class SessionProvider {
   private static sessions: Record<string, RemoteSession> = {};
