@@ -20,6 +20,7 @@
   "languageChanged": "Language updated.",
   "chooseAction": "Choose action",
   "chooseConnectionsToImport": "Choose connections to import",
+  "importRewriteHint": "Already exists, select to rewrite",
   "fileNotFound": "File not found: {file}",
   "importedConnections": "Imported {count} connections from {source}",
   "importedConnectionsFz": "Imported {count} connections from FileZilla",

@@ -20,6 +20,7 @@
   "languageChanged": "Мову оновлено.",
   "chooseAction": "Оберіть дію",
   "chooseConnectionsToImport": "Оберіть підключення для імпорту",
+  "importRewriteHint": "Вже існує, оберіть для перезапису",
   "fileNotFound": "Файл не знайдено: {file}",
   "importedConnections": "Імпортовано {count} підключень з {source}",
   "importedConnectionsFz": "Імпортовано {count} підключень з FileZilla",

@@ -6,12 +6,30 @@ import { getAddConnectionHtml } from '../ui/webview';
 import { LangService } from '../services/LangService';
 import { ConfigService } from '../services/ConfigService';
 import { TreeDataProvider } from '../ui/TreeDataProvider';
+import { ConnectionManager } from '../services/ConnectionManager';
 import { SessionProvider } from '../services/SessionProvider';
 import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
+
+function normalizePortByType(rawPort: any, type: 'ftp' | 'ssh'): number {
+  const parsed = Number.parseInt(String(rawPort ?? ''), 10);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return type === 'ftp' ? 21 : 22;
+}
+
+function buildConnectionIdentity(connection: any): string {
+  const type = String(connection?.type || '').trim().toLowerCase();
+  const host = String(connection?.host || '').trim().toLowerCase();
+  const user = String(connection?.user || '').trim().toLowerCase();
+  const port = normalizePortByType(connection?.port, type === 'ftp' ? 'ftp' : 'ssh');
+  return `${type}|${host}|${port}|${user}`;
+}
 
 export function registerConnectionCommands(saveConnection: Function) {
   const context = Container.get('extensionContext') as vscode.ExtensionContext;
   const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
+  const connectionManager = Container.get('connectionManager') as ConnectionManager;
 
   context.subscriptions.push(vscode.commands.registerCommand('remotix.importFileZilla', async () => {
     try {
@@ -121,40 +139,92 @@ export function registerConnectionCommands(saveConnection: Function) {
         vscode.window.showWarningMessage(LangService.t('noFtpConnections'));
         return;
       }
+
+      const config = ConfigService.getGlobalConfig();
+      const existingIdentityMap = new Map<string, number>(
+        config.connections.map((c: any, index: number) => [buildConnectionIdentity(c), index])
+      );
+
+      const importCandidates = connections.map((connection, index) => {
+        const normalizedConnection = {
+          ...connection,
+          type: connection.type as 'ftp' | 'ssh',
+          port: normalizePortByType(connection.port, connection.type as 'ftp' | 'ssh')
+        };
+        const identity = buildConnectionIdentity(normalizedConnection);
+        const exists = existingIdentityMap.has(identity);
+        return {
+          key: `${identity}|${index}`,
+          connection,
+          identity,
+          exists
+        };
+      });
+
       const picks = await vscode.window.showQuickPick(
-        connections.map(c => ({
-          label: c.label,
-          picked: true,
-          detail: `${c.user || ''}@${c.host || ''}:${c.port || ''}`,
-          type: c.type
+        importCandidates.map(candidate => ({
+          label: candidate.connection.label,
+          picked: !candidate.exists,
+          detail: `${candidate.connection.user || ''}@${candidate.connection.host || ''}:${candidate.connection.port || ''}`,
+          description: candidate.exists ? LangService.t('importRewriteHint') : undefined,
+          key: candidate.key
         })),
         { canPickMany: true, placeHolder: LangService.t('chooseConnectionsToImport') }
       );
       if (!picks || picks.length === 0) return;
-      const toImport = connections.filter(c => picks.find(p => p.label === c.label && p.type === c.type));
-      const config = ConfigService.getGlobalConfig();
-      let added = 0;
-      for (const connection of toImport) {
-        const exists = config.connections.some(
-          (c: any) => c.host === connection.host && c.port === connection.port && c.user === connection.user && c.type === (connection.type as 'ftp' | 'ssh')
-        );
-        if (!exists) {
-          const { password, ...connectionWithoutPassword } = connection;
+      const selectedKeys = new Set(picks.map((pick: any) => String((pick as any).key || '')));
+      const selectedCandidates = importCandidates.filter(candidate => selectedKeys.has(candidate.key));
+
+      let applied = 0;
+      for (const candidate of selectedCandidates) {
+        const connection = candidate.connection;
+        const { password, ...connectionWithoutPassword } = connection;
+        const normalizedConnection = {
+          ...connectionWithoutPassword,
+          type: connection.type as 'ftp' | 'ssh',
+          port: normalizePortByType(connection.port, connection.type as 'ftp' | 'ssh')
+        };
+
+        const identity = buildConnectionIdentity(normalizedConnection);
+
+        const existingIndex = existingIdentityMap.get(identity);
+        if (existingIndex === undefined) {
           if (password) {
             await ConfigService.storePassword(connection.label, password);
           }
-          config.connections.push({ ...connectionWithoutPassword, type: connection.type as 'ftp' | 'ssh', port: parseInt(connection.port, 10) });
-          added++;
+          config.connections.push(normalizedConnection);
+          existingIdentityMap.set(identity, config.connections.length - 1);
+          applied++;
+          continue;
         }
+
+        const existingConnection = config.connections[existingIndex] as any;
+        const oldLabel = String(existingConnection?.label || '');
+        const newLabel = String(normalizedConnection?.label || '');
+
+        config.connections[existingIndex] = {
+          ...existingConnection,
+          ...normalizedConnection
+        } as any;
+
+        if (password) {
+          await ConfigService.storePassword(newLabel, password);
+          if (oldLabel && oldLabel !== newLabel) {
+            await ConfigService.deletePassword(oldLabel);
+          }
+        } else if (oldLabel && newLabel && oldLabel !== newLabel) {
+          await ConfigService.movePassword(oldLabel, newLabel);
+        }
+
+        applied++;
       }
+
       ConfigService.saveGlobalConfig(config);
-      if (added > 0) {
-        if (Array.isArray((treeDataProvider as any).connections)) {
-          (treeDataProvider as any).connections = config.connections.slice();
-        }
+      if (applied > 0) {
+        connectionManager.load();
         treeDataProvider.refresh();
       }
-      vscode.window.showInformationMessage(LangService.t('importedConnectionsFz', { count: added }));
+      vscode.window.showInformationMessage(LangService.t('importedConnectionsFz', { count: applied }));
     } catch (e) {
       vscode.window.showErrorMessage(LangService.t('importErrorFz', { error: (e instanceof Error ? e.message : String(e)) }));
     }
@@ -201,19 +271,81 @@ export function registerConnectionCommands(saveConnection: Function) {
         vscode.window.showWarningMessage(LangService.t('noConnectionsFound'));
         return;
       }
+
+      const config = ConfigService.getGlobalConfig();
+      const existingIdentityMap = new Map<string, number>(
+        config.connections.map((c: any, index: number) => [buildConnectionIdentity(c), index])
+      );
+
+      const importCandidates = connections.map((connection, index) => {
+        const normalizedConnection = {
+          ...connection,
+          type: 'ssh' as const,
+          port: normalizePortByType(connection.port, 'ssh')
+        };
+        const identity = buildConnectionIdentity(normalizedConnection);
+        const exists = existingIdentityMap.has(identity);
+        return {
+          key: `${identity}|${index}`,
+          connection,
+          identity,
+          exists
+        };
+      });
+
       const picks = await vscode.window.showQuickPick(
-        connections.map(c => ({ label: c.label, picked: true, detail: `${c.user || ''}@${c.host || ''}:${c.port || ''}` })),
+        importCandidates.map(candidate => ({
+          label: candidate.connection.label,
+          picked: !candidate.exists,
+          detail: `${candidate.connection.user || ''}@${candidate.connection.host || ''}:${candidate.connection.port || ''}`,
+          description: candidate.exists ? LangService.t('importRewriteHint') : undefined,
+          key: candidate.key
+        })),
         { canPickMany: true, placeHolder: LangService.t('chooseConnectionsToImport') }
       );
       if (!picks || picks.length === 0) return;
-      const toImport = connections.filter(c => picks.find(p => p.label === c.label));
-      const config = ConfigService.getGlobalConfig();
-      for (const connection of toImport) {
-        config.connections.push(connection);
-        treeDataProvider.addConnection(connection);
+      const selectedKeys = new Set(picks.map((pick: any) => String((pick as any).key || '')));
+      const selectedCandidates = importCandidates.filter(candidate => selectedKeys.has(candidate.key));
+
+      let applied = 0;
+      for (const candidate of selectedCandidates) {
+        const connection = candidate.connection;
+        const normalizedConnection = {
+          ...connection,
+          type: 'ssh' as const,
+          port: normalizePortByType(connection.port, 'ssh')
+        };
+
+        const identity = buildConnectionIdentity(normalizedConnection);
+        const existingIndex = existingIdentityMap.get(identity);
+        if (existingIndex === undefined) {
+          config.connections.push(normalizedConnection);
+          existingIdentityMap.set(identity, config.connections.length - 1);
+          applied++;
+          continue;
+        }
+
+        const existingConnection = config.connections[existingIndex] as any;
+        const oldLabel = String(existingConnection?.label || '');
+        const newLabel = String(normalizedConnection?.label || '');
+
+        config.connections[existingIndex] = {
+          ...existingConnection,
+          ...normalizedConnection
+        } as any;
+
+        if (oldLabel && newLabel && oldLabel !== newLabel) {
+          await ConfigService.movePassword(oldLabel, newLabel);
+        }
+
+        applied++;
       }
       ConfigService.saveGlobalConfig(config);
-      vscode.window.showInformationMessage(LangService.t('importedConnections', { count: toImport.length, source: sshConfigPath }));
+      if (applied > 0) {
+        connectionManager.load();
+        treeDataProvider.refresh();
+      }
+      vscode.window.showInformationMessage(LangService.t('importedConnections', { count: applied, source: sshConfigPath }));
     } catch (e) {
       vscode.window.showErrorMessage(LangService.t('importErrorSsh', { error: (e instanceof Error ? e.message : String(e)) }));
     }
