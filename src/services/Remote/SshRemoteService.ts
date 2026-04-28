@@ -10,6 +10,7 @@ import { LoggerService } from '../LoggerService';
 import { SessionProvider } from '../SessionProvider';
 import { TreeDataProvider } from '../../ui/TreeDataProvider';
 import { RemotePathHelper } from '../../helpers/RemotePathHelper';
+import { PermissionIconHelper, RemoteBaseIcon } from '../../helpers/PermissionIconHelper';
 
 export class SshRemoteService implements RemoteService {
   private connection: ConnectionItem;
@@ -50,6 +51,67 @@ export class SshRemoteService implements RemoteService {
     const configured = vscode.workspace.getConfiguration('remotix').get<number>('sshDownloadConcurrency', 4);
     const value = Number.isFinite(configured as number) ? Number(configured) : 4;
     return Math.max(1, Math.min(10, Math.floor(value)));
+  }
+
+  private getPermissionStatusForSshEntry(fileEntry: any): 'no-read' | 'read-only' | undefined {
+    const longname = String(fileEntry?.longname || '');
+    const parts = longname.trim().split(/\s+/);
+    const permBlock = parts[0] || '';
+    const owner = parts[2] || '';
+
+    if (permBlock.length >= 10) {
+      const perms = permBlock.slice(1, 10);
+      const ownerTriplet = perms.slice(0, 3);
+      const worldTriplet = perms.slice(6, 9);
+      const targetTriplet = owner && this.connection.user && owner === this.connection.user
+        ? ownerTriplet
+        : worldTriplet;
+
+      const canRead = targetTriplet[0] === 'r';
+      const canWrite = targetTriplet[1] === 'w';
+
+      if (!canRead) {
+        return 'no-read';
+      }
+
+      if (canRead && !canWrite) {
+        return 'read-only';
+      }
+
+      return undefined;
+    }
+
+    // Fallback for servers that do not provide a parseable longname.
+    const mode = Number(fileEntry?.attrs?.mode);
+    if (!Number.isFinite(mode)) {
+      return undefined;
+    }
+
+    const anyRead = (mode & 0o444) !== 0;
+    const anyWrite = (mode & 0o222) !== 0;
+
+    if (!anyRead) {
+      return 'no-read';
+    }
+
+    if (anyRead && !anyWrite) {
+      return 'read-only';
+    }
+
+    return undefined;
+  }
+
+  private getBaseIconForSshEntry(isDir: boolean, fileName: string): RemoteBaseIcon {
+    if (isDir) {
+      return 'folder';
+    }
+
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (['php', 'html', 'js', 'ts', 'css'].includes(ext || '')) return 'file-code';
+    if (['jpg', 'png', 'gif', 'svg'].includes(ext || '')) return 'file-media';
+    if (['zip', 'rar', 'tar', 'gz'].includes(ext || '')) return 'file-zip';
+    if (['cert', 'key', 'pem', 'cer'].includes(ext || '')) return 'lock-file';
+    return 'file';
   }
 
   public async connect(): Promise<SshClient> {
@@ -192,19 +254,11 @@ export class SshRemoteService implements RemoteService {
                           (item as any).connectionLabel = this.connection.label;
                           item.contextValue = isDir ? 'ssh-folder' : 'ssh-file';
 
-                          if (!isDir) {
-                              const ext = f.filename.split('.').pop()?.toLowerCase();
-                              if (isDir) {
-                                  item.iconPath = new vscode.ThemeIcon('folder');
-                              } else {
-                                  let iconName = 'file';
-                                  if (['php', 'html', 'js', 'ts', 'css'].includes(ext)) iconName = 'file-code';
-                                  if (['jpg', 'png', 'gif', 'svg'].includes(ext)) iconName = 'file-media';
-                                  if (['zip', 'rar', 'tar', 'gz'].includes(ext)) iconName = 'file-zip';
-                                  if (['cert', 'key', 'pem', 'cer'].includes(ext)) iconName = 'lock';
+                                const permissionStatus = this.getPermissionStatusForSshEntry(f);
+                                const baseIcon = this.getBaseIconForSshEntry(isDir, f.filename);
+                                item.iconPath = PermissionIconHelper.createPermissionIcon(baseIcon, permissionStatus);
 
-                                  item.iconPath = new vscode.ThemeIcon(iconName);
-                              }
+                          if (!isDir) {
                               item.command = {
                                   command: 'remotixView.itemClick',
                                   title: LangService.t('openFile'),
