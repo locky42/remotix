@@ -5,6 +5,7 @@ import { Client as SshClient } from 'ssh2';
 import { LangService } from '../LangService';
 import { ConnectionItem } from '../../types';
 import { RemoteService } from './RemoteService';
+import { ConfigService } from '../ConfigService';
 import { LoggerService } from '../LoggerService';
 import { SessionProvider } from '../SessionProvider';
 import { TreeDataProvider } from '../../ui/TreeDataProvider';
@@ -51,7 +52,11 @@ export class SshRemoteService implements RemoteService {
     return Math.max(1, Math.min(10, Math.floor(value)));
   }
 
-  public connect(): Promise<SshClient> {
+  public async connect(): Promise<SshClient> {
+    if (this.connection.authMethod === 'password' && !this.connection.password) {
+      this.connection.password = await ConfigService.getPassword(this.connection.label);
+    }
+
     return new Promise((resolve, reject) => {
       const sshClient = new SshClient();
       LoggerService.log('[SshRemoteService] Connecting to SSH (always new connection)...');

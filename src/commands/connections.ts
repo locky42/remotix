@@ -139,7 +139,11 @@ export function registerConnectionCommands(saveConnection: Function) {
           (c: any) => c.host === connection.host && c.port === connection.port && c.user === connection.user && c.type === (connection.type as 'ftp' | 'ssh')
         );
         if (!exists) {
-          config.connections.push({ ...connection, type: connection.type as 'ftp' | 'ssh', port: parseInt(connection.port, 10) });
+          const { password, ...connectionWithoutPassword } = connection;
+          if (password) {
+            await ConfigService.storePassword(connection.label, password);
+          }
+          config.connections.push({ ...connectionWithoutPassword, type: connection.type as 'ftp' | 'ssh', port: parseInt(connection.port, 10) });
           added++;
         }
       }
@@ -227,7 +231,7 @@ export function registerConnectionCommands(saveConnection: Function) {
       async (message) => {
         if (message.command === 'add') {
           const connection = message.data;
-          saveConnection(connection, !!connection.global);
+          await saveConnection(connection, !!connection.global);
           treeDataProvider.addConnection(connection);
           panel.dispose();
         } else if (message.command === 'cancel') {
@@ -255,10 +259,25 @@ export function registerConnectionCommands(saveConnection: Function) {
     );
     panel.webview.html = getAddConnectionHtml(connection);
     panel.webview.onDidReceiveMessage(
-      (message) => {
+      async (message) => {
         if (message.command === 'add') {
+          const oldLabel = connection.label;
           Object.assign(connection, message.data);
-          connection.label = `${connection.type.toUpperCase()}: ${connection.label}`;
+          const newLabel = `${connection.type.toUpperCase()}: ${connection.label}`;
+
+          // Store password in SecretStorage if a new password is provided.
+          if (connection.password) {
+            await ConfigService.storePassword(newLabel, connection.password);
+            delete connection.password;
+            if (oldLabel !== newLabel) {
+              await ConfigService.deletePassword(oldLabel);
+            }
+          } else if (oldLabel !== newLabel) {
+            // Preserve existing secret when only label changed.
+            await ConfigService.movePassword(oldLabel, newLabel);
+          }
+
+          connection.label = newLabel;
           connection.detail = `${connection.user}@${connection.host}:${connection.port}`;
           treeDataProvider.refresh();
           panel.dispose();
@@ -301,6 +320,7 @@ export function registerConnectionCommands(saveConnection: Function) {
       projectConfig.connections.splice(idx2, 1);
       ConfigService.saveProjectConfig(projectConfig);
     }
+    await ConfigService.deletePassword(label);
     treeDataProvider.removeConnection(label);
     vscode.window.showInformationMessage(LangService.t('connectionDeleted', { label }));
   }));

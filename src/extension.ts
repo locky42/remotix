@@ -36,7 +36,13 @@ async function migrateLegacyLanguageSetting(): Promise<void> {
   }
 }
 
-function saveConnection(connection: ConnectionItem, global: boolean) {
+async function saveConnection(connection: ConnectionItem, global: boolean) {
+  // Store password in SecretStorage if present
+  if (connection.password) {
+    await ConfigService.storePassword(connection.label, connection.password);
+    // Remove password before saving config
+    delete connection.password;
+  }
   if (global) {
     const config = ConfigService.getGlobalConfig();
     config.connections.push(connection);
@@ -48,7 +54,7 @@ function saveConnection(connection: ConnectionItem, global: boolean) {
   }
 }
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   migrateLegacyLanguageSetting()
     .catch(() => {})
     .finally(() => {
@@ -56,10 +62,24 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
   Container.set('extensionContext', context);
-  Container.set('connectionManager', new ConnectionManager());
+
+  await ConfigService.migrateLegacyPasswordsFromConfigFiles();
+
+  const connectionManager = new ConnectionManager();
+  Container.set('connectionManager', connectionManager);
   const remoteServiceProvider = new RemoteServiceProvider();
   Container.set('remoteServiceProvider', remoteServiceProvider);
   const treeDataProvider = new TreeDataProvider();
+  // Patch: load passwords from SecretStorage for all connections
+  const patchConnectionsWithPasswords = async () => {
+    const all = connectionManager.getAll();
+    for (const conn of all) {
+      if (conn && !conn.password) {
+        conn.password = await ConfigService.getPassword(conn.label);
+      }
+    }
+  };
+  patchConnectionsWithPasswords();
   Container.set('treeDataProvider', treeDataProvider);
 
   const treeView = vscode.window.createTreeView('remotixView', {
@@ -87,12 +107,17 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.commands.registerCommand('remotix.openSshTerminal', async (item: vscode.TreeItem) => {
     const connection = treeDataProvider.getConnectionByLabel(item.label as string);
     if (!connection || connection.type !== 'ssh') return;
+    // Always fetch password from SecretStorage
+    let password = connection.password;
+    if (connection.authMethod === 'password') {
+      password = await ConfigService.getPassword(connection.label);
+    }
     let sshCmd = `ssh${connection.port ? ' -p ' + connection.port : ''}`;
     if (connection.authMethod === 'privateKey' && connection.authFile) {
       sshCmd += ` -i "${connection.authFile}"`;
     }
     sshCmd += ` ${connection.user}@${connection.host}`;
-    if (connection.authMethod === 'password' && connection.password) {
+    if (connection.authMethod === 'password' && password) {
       const { execSync } = require('child_process');
       let sshpassExists = false;
       try {
@@ -102,7 +127,7 @@ export function activate(context: vscode.ExtensionContext) {
         sshpassExists = false;
       }
       if (sshpassExists) {
-        sshCmd = `sshpass -p '${connection.password.replace(/'/g, "'\\''")}' ` + sshCmd;
+        sshCmd = `sshpass -p '${password.replace(/'/g, "'\\''")}' ` + sshCmd;
       } else {
         vscode.window.showInformationMessage(LangService.t('sshpassNotFound'));
       }

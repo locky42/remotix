@@ -5,6 +5,7 @@ import { LangService } from '../LangService';
 import { RemoteService } from './RemoteService';
 import { Client as FtpClient } from 'basic-ftp';
 import { LoggerService } from '../LoggerService';
+import { ConfigService } from '../ConfigService';
 import { SessionProvider } from '../SessionProvider';
 import { TreeDataProvider } from '../../ui/TreeDataProvider';
 import { RemotePathHelper } from '../../helpers/RemotePathHelper';
@@ -99,7 +100,14 @@ export class FtpRemoteService implements RemoteService {
     return Math.max(1, Math.min(10, Math.floor(value)));
   }
 
+  private async ensurePasswordLoaded(): Promise<void> {
+    if (!this.connection.password) {
+      this.connection.password = await ConfigService.getPassword(this.connection.label);
+    }
+  }
+
   private async createWorkerClient(): Promise<FtpClient> {
+    await this.ensurePasswordLoaded();
     const client = new FtpClient();
     await client.access({
       host: this.connection.host,
@@ -122,6 +130,7 @@ export class FtpRemoteService implements RemoteService {
 
   public connect(): Promise<FtpClient> {
     return new Promise(async (resolve, reject) => {
+      await this.ensurePasswordLoaded();
       const ftpClient = new FtpClient();
       LoggerService.log(`[FtpRemoteService] Connecting to FTP (always new connection, label: ${this.connection.label})...`);
 
