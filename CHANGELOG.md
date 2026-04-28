@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-04-28
+
+### Added
+
+- Manual drag-and-drop sorting for connections in the list.
+- File/folder properties dialog (info window).
+- Change permissions (chmod) for SSH/FTP, including recursive mode.
+- Permission icons for SSH.
+- View and copy connection password.
+
+### Changed
+
+- Connection passwords are now migrated to Secret Storage for improved security.
+
+### Fixed
+
+- Tree refresh after FileZilla import.
+- Duplicate connection detection and prevention during import.
+
 ## [1.2.0] - 2026-04-27
 
 ### Changed
