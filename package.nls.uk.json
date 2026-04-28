@@ -11,6 +11,7 @@
   "command.download": "Завантажити",
   "command.rename": "Перейменувати",
   "command.changePermissions": "Змінити права",
+  "command.showProperties": "Інфо",
   "command.deleteFile": "Видалити",
   "command.copyPath": "Копіювати шлях",
   "command.importSshConfig": "Remotix: Імпортувати з SSH config",

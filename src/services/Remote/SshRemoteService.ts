@@ -142,6 +142,162 @@ export class SshRemoteService implements RemoteService {
     return `${owner}${group}${world}`;
   }
 
+  private detectOwnerGroupFromSshEntry(fileEntry: any): { ownerName?: string; groupName?: string } {
+    const longname = String(fileEntry?.longname || '');
+    const parts = longname.trim().split(/\s+/);
+    if (parts.length >= 4) {
+      return {
+        ownerName: parts[2],
+        groupName: parts[3],
+      };
+    }
+    return {};
+  }
+
+  private async getSshExtendedProperties(remotePath: string): Promise<{ ownerName?: string; groupName?: string; createdAt?: string | number }> {
+    const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
+    if (!session) {
+      return {};
+    }
+
+    const command = `stat -c '%U|%G|%W|%w' ${this.quoteForShell(remotePath)}`;
+
+    return await new Promise((resolve) => {
+      session.exec(command, (err: Error | undefined, stream: any) => {
+        if (err) {
+          resolve({});
+          return;
+        }
+
+        let stdout = '';
+        const timeoutHandle = setTimeout(() => {
+          try {
+            if (typeof stream?.close === 'function') {
+              stream.close();
+            }
+          } catch {
+          }
+          resolve({});
+        }, 4000);
+
+        stream.on('data', (chunk: Buffer) => {
+          stdout += chunk.toString();
+        });
+
+        const finalize = (): void => {
+          clearTimeout(timeoutHandle);
+          const line = stdout.split(/\r?\n/).map((it: string) => it.trim()).find(Boolean);
+          if (!line) {
+            resolve({});
+            return;
+          }
+
+          const [ownerName, groupName, createdEpochRaw, createdRaw] = line.split('|');
+          const createdEpoch = Number(createdEpochRaw);
+          const createdAt = Number.isFinite(createdEpoch) && createdEpoch > 0
+            ? createdEpoch
+            : (createdRaw && createdRaw !== '-' ? createdRaw : undefined);
+
+          resolve({
+            ownerName: ownerName && ownerName !== 'UNKNOWN' ? ownerName : undefined,
+            groupName: groupName && groupName !== 'UNKNOWN' ? groupName : undefined,
+            createdAt,
+          });
+        };
+
+        stream.on('close', finalize);
+        stream.on('error', () => {
+          clearTimeout(timeoutHandle);
+          resolve({});
+        });
+      });
+    });
+  }
+
+  private formatPropertiesDate(value: any): string {
+    if (value === undefined || value === null || value === '') {
+      return LangService.t('propertiesUnknown');
+    }
+
+    if (typeof value === 'number' && value <= 0) {
+      return LangService.t('propertiesUnknown');
+    }
+
+    const date = value instanceof Date
+      ? value
+      : new Date(typeof value === 'number' ? value * 1000 : value);
+
+    if (Number.isNaN(date.getTime())) {
+      return LangService.t('propertiesUnknown');
+    }
+
+    return date.toLocaleString();
+  }
+
+  private formatPropertiesSize(size: number | undefined, isDirectory: boolean): string {
+    if (isDirectory) {
+      return '-';
+    }
+    if (!Number.isFinite(size as number)) {
+      return LangService.t('propertiesUnknown');
+    }
+    return `${size} B`;
+  }
+
+  async showPropertiesWithDialogs(item: any): Promise<void> {
+    const remotePath = String(item?.sshPath || item?.ftpPath || '').trim();
+    if (!remotePath) {
+      vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
+      return;
+    }
+
+    const isDirectory = item?.contextValue === 'ssh-folder' || item?.contextValue === 'ftp-folder';
+    const leafName = String(remotePath).split('/').filter(Boolean).pop() || remotePath;
+
+    try {
+      const sftp = await this.getSftp();
+      const attrs = await new Promise<any>((resolve, reject) => {
+        sftp.stat(remotePath, (err: any, stat: any) => {
+          if (err) {
+            return reject(err);
+          }
+          resolve(stat);
+        });
+      });
+
+      const modeFromAttrs = Number.isFinite(Number(attrs?.mode))
+        ? (Number(attrs.mode) & 0o777).toString(8).padStart(3, '0')
+        : undefined;
+      const extended = await this.getSshExtendedProperties(remotePath);
+      const permissions = this.normalizePermissionMode(String(item?.permissionMode || ''))
+        || modeFromAttrs
+        || LangService.t('propertiesUnknown');
+
+      const items: vscode.QuickPickItem[] = [
+        { label: LangService.t('propertiesPath'), description: remotePath },
+        { label: LangService.t('propertiesType'), description: isDirectory ? LangService.t('propertiesDirectory') : LangService.t('propertiesFile') },
+        { label: LangService.t('propertiesPermissions'), description: permissions },
+        { label: LangService.t('propertiesSize'), description: this.formatPropertiesSize(attrs?.size, isDirectory) },
+        { label: LangService.t('propertiesOwner'), description: String(item?.ownerName || extended.ownerName || LangService.t('propertiesUnknown')) },
+        { label: LangService.t('propertiesGroup'), description: String(item?.groupName || extended.groupName || LangService.t('propertiesUnknown')) },
+        { label: LangService.t('propertiesUid'), description: attrs?.uid !== undefined ? String(attrs.uid) : LangService.t('propertiesUnknown') },
+        { label: LangService.t('propertiesGid'), description: attrs?.gid !== undefined ? String(attrs.gid) : LangService.t('propertiesUnknown') },
+        { label: LangService.t('propertiesCreated'), description: this.formatPropertiesDate(extended.createdAt) },
+        { label: LangService.t('propertiesModified'), description: this.formatPropertiesDate(attrs?.mtime) },
+      ];
+
+      await vscode.window.showQuickPick(items, {
+        title: LangService.t('propertiesTitle', { name: leafName }),
+        placeHolder: remotePath,
+        ignoreFocusOut: true,
+      });
+    } catch (error: any) {
+      vscode.window.showErrorMessage(LangService.t('propertiesLoadFailed', {
+        error: error instanceof Error ? error.message : String(error)
+      }));
+    }
+  }
+
   public async connect(): Promise<SshClient> {
     if (this.connection.authMethod === 'password' && !this.connection.password) {
       this.connection.password = await ConfigService.getPassword(this.connection.label);
@@ -278,9 +434,13 @@ export class SshRemoteService implements RemoteService {
                                 : vscode.TreeItemCollapsibleState.None
                           );
 
+                          const ownerGroup = this.detectOwnerGroupFromSshEntry(f);
+
                           (item as any).sshPath = fullPath;
                           (item as any).connectionLabel = this.connection.label;
                           (item as any).permissionMode = this.detectModeFromSshEntry(f);
+                          (item as any).ownerName = ownerGroup.ownerName;
+                          (item as any).groupName = ownerGroup.groupName;
                           item.contextValue = isDir ? 'ssh-folder' : 'ssh-file';
 
                                 const permissionStatus = this.getPermissionStatusForSshEntry(f);

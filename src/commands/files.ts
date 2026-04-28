@@ -274,6 +274,25 @@ export function registerFileFolderCommands() {
     await service.changePermissionsWithDialogs(item);
   }));
 
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.showProperties', async (item: any) => {
+    const connection = resolveConnectionItem(item);
+    if (!connection) {
+      vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
+      return;
+    }
+    const service = await (Container.get('remoteServiceProvider') as RemoteServiceProvider).getRemoteService(connection.label) as RemoteService;
+    if (!service) {
+      return;
+    }
+
+    if (!service.showPropertiesWithDialogs) {
+      vscode.window.showErrorMessage(LangService.t('showPropertiesNotSupported'));
+      return;
+    }
+
+    await service.showPropertiesWithDialogs(item);
+  }));
+
   context.subscriptions.push(vscode.commands.registerCommand('remotix.createFolder', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {

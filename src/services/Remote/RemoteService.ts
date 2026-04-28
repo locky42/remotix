@@ -29,6 +29,8 @@ export interface RemoteService {
   changePermissionsWithDialogs?(item: any): Promise<void>;
   changePermissions?(remotePath: string, options: PermissionChangeOptions): Promise<void>;
 
+  showPropertiesWithDialogs?(item: any): Promise<void>;
+
   copyItem?(sourceRemotePath: string, targetRemotePath: string, isDirectory: boolean): Promise<void>;
   
   editFileWithDialogs?(item: any): Promise<void>;

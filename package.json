@@ -47,7 +47,8 @@
     "onCommand:remotix.refresh",
     "onCommand:remotix.copyItem",
     "onCommand:remotix.pasteItem",
-    "onCommand:remotix.changePermissions"
+    "onCommand:remotix.changePermissions",
+    "onCommand:remotix.showProperties"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -157,6 +158,11 @@
         "command": "remotix.changePermissions",
         "title": "%command.changePermissions%",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "remotix.showProperties",
+        "title": "%command.showProperties%",
+        "icon": "$(info)"
       }
     ],
     "menus": {
@@ -224,8 +230,13 @@
         },
         {
           "command": "remotix.copyPath",
-          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder)",
+          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder || viewItem == ftp-file || viewItem == ftp-folder)",
           "group": "2_path"
+        },
+        {
+          "command": "remotix.showProperties",
+          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder)",
+          "group": "2_path@2"
         },
         {
           "command": "remotix.copyItem",
@@ -291,6 +302,11 @@
           "command": "remotix.rename",
           "when": "view == remotixView && (viewItem == ftp-file || viewItem == ftp-folder)",
           "group": "4_modification@1"
+        },
+        {
+          "command": "remotix.showProperties",
+          "when": "view == remotixView && (viewItem == ftp-file || viewItem == ftp-folder)",
+          "group": "2_path@2"
         },
         {
           "command": "remotix.changePermissions",

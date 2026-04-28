@@ -138,6 +138,87 @@ export class FtpRemoteService implements RemoteService {
     return undefined;
   }
 
+  private formatPropertiesDate(value: any): string {
+    if (value === undefined || value === null || value === '') {
+      return LangService.t('propertiesUnknown');
+    }
+
+    if (typeof value === 'number' && value <= 0) {
+      return LangService.t('propertiesUnknown');
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return LangService.t('propertiesUnknown');
+    }
+
+    return date.toLocaleString();
+  }
+
+  private formatPropertiesSize(size: number | undefined, isDirectory: boolean): string {
+    if (isDirectory) {
+      return '-';
+    }
+    if (!Number.isFinite(size as number)) {
+      return LangService.t('propertiesUnknown');
+    }
+    return `${size} B`;
+  }
+
+  async showPropertiesWithDialogs(item: any): Promise<void> {
+    const remotePath = String(item?.ftpPath || item?.sshPath || '').trim();
+    if (!remotePath) {
+      vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
+      return;
+    }
+
+    const absolutePath = this.toAbsoluteRemotePath(remotePath);
+    const isDirectoryFromItem = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder';
+    const leafName = this.normalizeRemoteLeafName(absolutePath) || absolutePath;
+
+    try {
+      const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
+      if (!session || (session as any).closed) {
+        throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
+      }
+
+      let entry: any | undefined;
+      if (absolutePath !== '/') {
+        const parentPath = this.getParentRemotePath(absolutePath);
+        const list = await session.list(parentPath);
+        entry = list.find((candidate: any) => this.normalizeRemoteLeafName(candidate?.name) === leafName);
+      }
+
+      const isDirectory = entry
+        ? entry.type === 2
+        : isDirectoryFromItem;
+      const permissions = this.normalizePermissionMode(String(item?.permissionMode || ''))
+        || this.detectModeFromFtpEntry(entry)
+        || LangService.t('propertiesUnknown');
+
+      const items: vscode.QuickPickItem[] = [
+        { label: LangService.t('propertiesPath'), description: absolutePath },
+        { label: LangService.t('propertiesType'), description: isDirectory ? LangService.t('propertiesDirectory') : LangService.t('propertiesFile') },
+        { label: LangService.t('propertiesPermissions'), description: permissions },
+        { label: LangService.t('propertiesSize'), description: this.formatPropertiesSize(entry?.size, isDirectory) },
+        { label: LangService.t('propertiesOwner'), description: entry?.user ? String(entry.user) : LangService.t('propertiesUnknown') },
+        { label: LangService.t('propertiesGroup'), description: entry?.group ? String(entry.group) : LangService.t('propertiesUnknown') },
+        { label: LangService.t('propertiesCreated'), description: this.formatPropertiesDate(entry?.createdAt || entry?.rawCreatedAt || entry?.created) },
+        { label: LangService.t('propertiesModified'), description: this.formatPropertiesDate(entry?.modifiedAt || entry?.rawModifiedAt) },
+      ];
+
+      await vscode.window.showQuickPick(items, {
+        title: LangService.t('propertiesTitle', { name: leafName }),
+        placeHolder: absolutePath,
+        ignoreFocusOut: true,
+      });
+    } catch (error: any) {
+      vscode.window.showErrorMessage(LangService.t('propertiesLoadFailed', {
+        error: error instanceof Error ? error.message : String(error)
+      }));
+    }
+  }
+
   private async applyFtpChmod(client: FtpClient, remotePath: string, mode: string): Promise<void> {
     const absolutePath = this.toAbsoluteRemotePath(remotePath);
     let lastError: any;
