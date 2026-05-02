@@ -28,6 +28,22 @@ export class PropertiesFormatHelper {
       return unknownLabel;
     }
 
-    return `${size} B`;
+    const bytes = Number(size);
+    if (bytes < 1024) {
+      return `${Math.floor(bytes)} B`;
+    }
+
+    const units = ['KB', 'MB', 'GB', 'TB', 'PB'];
+    let value = bytes / 1024;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex++;
+    }
+
+    const maximumFractionDigits = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+    const formatted = new Intl.NumberFormat(undefined, { maximumFractionDigits }).format(value);
+    return `${formatted} ${units[unitIndex]}`;
   }
 }

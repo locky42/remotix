@@ -426,6 +426,15 @@ export class FtpRemoteService implements RemoteService {
             (treeItem as any).connectionLabel = this.connection.label;
             (treeItem as any).permissionMode = this.detectModeFromEntry(item);
 
+            const unknownLabel = LangService.t('propertiesUnknown');
+            const modifiedValue = item?.modifiedAt || item?.rawModifiedAt;
+            const sizeText = PropertiesFormatHelper.formatSize(item?.size, isDir, unknownLabel);
+            const modifiedText = PropertiesFormatHelper.formatDate(modifiedValue, unknownLabel);
+            treeItem.description = isDir ? modifiedText : `${sizeText} • ${modifiedText}`;
+            treeItem.tooltip = isDir
+              ? `${leafName}\n${LangService.t('propertiesModified')}: ${modifiedText}`
+              : `${leafName}\n${LangService.t('propertiesSize')}: ${sizeText}\n${LangService.t('propertiesModified')}: ${modifiedText}`;
+
             if (isDir) {
               treeItem.iconPath = new vscode.ThemeIcon('folder');
             } else {

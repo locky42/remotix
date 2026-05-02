@@ -345,6 +345,14 @@ export class SshRemoteService implements RemoteService {
                           (item as any).groupName = ownerGroup.groupName;
                           item.contextValue = isDir ? 'ssh-folder' : 'ssh-file';
 
+                            const unknownLabel = LangService.t('propertiesUnknown');
+                            const sizeText = PropertiesFormatHelper.formatSize(f?.attrs?.size, isDir, unknownLabel);
+                            const modifiedText = PropertiesFormatHelper.formatDate(f?.attrs?.mtime, unknownLabel, true);
+                            item.description = isDir ? modifiedText : `${sizeText} • ${modifiedText}`;
+                            item.tooltip = isDir
+                              ? `${f.filename}\n${LangService.t('propertiesModified')}: ${modifiedText}`
+                              : `${f.filename}\n${LangService.t('propertiesSize')}: ${sizeText}\n${LangService.t('propertiesModified')}: ${modifiedText}`;
+
                                 const permissionStatus = this.getPermissionStatusForSshEntry(f);
                                 const baseIcon = this.getBaseIconForSshEntry(isDir, f.filename);
                                 item.iconPath = PermissionIconHelper.createPermissionIcon(baseIcon, permissionStatus);

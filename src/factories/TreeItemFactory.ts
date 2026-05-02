@@ -22,14 +22,12 @@ export class TreeItemFactory {
     );
     let desc = '';
     if (connection.type === 'ssh') {
-      desc = `${connection.user || ''}@${connection.detail || ''}:${connection.port || ''}`;
-      item.tooltip = `${LangService.t('editConnection')}: ${connection.user || ''}@${connection.detail || ''}:${connection.port || ''}\n${LangService.t('openSshTerminal')}`;
+      desc = `${connection.user || ''}@${connection.host || ''}:${connection.port || ''}`;
     } else {
-      desc = `${connection.user || ''}@${connection.detail || ''}:${connection.port || ''}`;
-      item.tooltip = `${LangService.t('editConnection')}: ${connection.user || ''}@${connection.detail || ''}:${connection.port || ''}`;
+      desc = `${connection.user || ''}@${connection.host || ''}:${connection.port || ''}`;
     }
     item.description = `${connection.type.toUpperCase()} • ${desc}`;
-    item.tooltip = `${item.tooltip}\n${LangService.t('dragToReorderConnections')}`;
+    item.tooltip = connection.label;
     item.iconPath = connection.type === 'ssh' 
       ? new vscode.ThemeIcon('terminal')
       : new vscode.ThemeIcon('cloud');
