@@ -1,120 +1,14 @@
 import * as vscode from 'vscode';
-import { ConnectionItem } from '../types';
+import { ConnectionItem, RemoteClipboard } from '../types';
 import { Container } from '../services/Container';
 import { LangService } from '../services/LangService';
 import { RemoteService } from '../services/Remote/RemoteService';
 import { ConnectionManager } from '../services/ConnectionManager';
 import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
-
-type RemoteClipboard = {
-  connectionLabel: string;
-  sourcePath: string;
-  sourceName: string;
-  isDirectory: boolean;
-  sourceKind?: 'remote' | 'local';
-};
+import { RemotePathHelper } from '../helpers/RemotePathHelper';
+import { RemoteClipboardHelper } from '../helpers/RemoteClipboardHelper';
 
 let remoteClipboard: RemoteClipboard | undefined;
-const REMOTIX_CLIPBOARD_PREFIX = 'remotix-clipboard:';
-
-function serializeRemoteClipboard(payload: RemoteClipboard): string {
-  return `${REMOTIX_CLIPBOARD_PREFIX}${encodeURIComponent(JSON.stringify(payload))}`;
-}
-
-function parseRemoteClipboard(raw: string): RemoteClipboard | undefined {
-  const text = String(raw || '').trim();
-  if (!text.startsWith(REMOTIX_CLIPBOARD_PREFIX)) {
-    return undefined;
-  }
-
-  const encoded = text.slice(REMOTIX_CLIPBOARD_PREFIX.length);
-  if (!encoded) {
-    return undefined;
-  }
-
-  try {
-    const decoded = decodeURIComponent(encoded);
-    const data = JSON.parse(decoded) as Partial<RemoteClipboard>;
-    if (
-      typeof data?.connectionLabel !== 'string' ||
-      typeof data?.sourcePath !== 'string' ||
-      typeof data?.sourceName !== 'string' ||
-      typeof data?.isDirectory !== 'boolean'
-    ) {
-      return undefined;
-    }
-
-    return {
-      connectionLabel: data.connectionLabel,
-      sourcePath: data.sourcePath,
-      sourceName: data.sourceName,
-      isDirectory: data.isDirectory,
-      sourceKind: data.sourceKind === 'local' ? 'local' : 'remote'
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-function parsePlainClipboardPath(raw: string): string | undefined {
-  const text = String(raw || '').trim();
-  if (!text || text.startsWith(REMOTIX_CLIPBOARD_PREFIX)) {
-    return undefined;
-  }
-
-  // Accept first line only to avoid accidental multiline clipboard contents.
-  const firstLine = text.split(/\r?\n/).map(line => line.trim()).find(Boolean);
-  if (!firstLine) {
-    return undefined;
-  }
-
-  return firstLine;
-}
-
-async function buildClipboardFromPlainPath(pathText: string, connectionLabel: string): Promise<RemoteClipboard | undefined> {
-  const fs = await import('fs');
-  const sourcePath = pathText.trim();
-  if (!sourcePath) {
-    return undefined;
-  }
-
-  const parts = sourcePath.replace(/\\/g, '/').split('/').filter(Boolean);
-  const sourceName = parts.length > 0 ? parts[parts.length - 1] : sourcePath;
-
-  let isDirectory = /\/$/.test(sourcePath);
-  let sourceKind: 'remote' | 'local' = 'remote';
-
-  try {
-    const stat = fs.statSync(sourcePath);
-    sourceKind = 'local';
-    isDirectory = stat.isDirectory();
-  } catch {
-  }
-
-  if (!isDirectory) {
-    if (sourceKind === 'remote') {
-      const picked = await vscode.window.showQuickPick(
-        [
-          { label: '$(file) File', value: 'file' },
-          { label: '$(folder) Folder', value: 'folder' }
-        ],
-        { placeHolder: 'Clipboard path type' }
-      );
-      if (!picked) {
-        return undefined;
-      }
-      isDirectory = picked.value === 'folder';
-    }
-  }
-
-  return {
-    connectionLabel,
-    sourcePath,
-    sourceName,
-    isDirectory,
-    sourceKind
-  };
-}
 
 function getItemPath(item: any): string | undefined {
   return item?.sshPath || item?.ftpPath;
@@ -134,43 +28,6 @@ function getItemName(item: any, sourcePath: string): string {
 function isDirectoryItem(item: any): boolean {
   const contextValue = String(item?.contextValue || '');
   return contextValue === 'ssh-folder' || contextValue === 'ftp-folder';
-}
-
-function getParentPath(path: string): string {
-  const normalized = String(path || '.').replace(/\\/g, '/').replace(/\/+$/g, '');
-  if (!normalized || normalized === '.') {
-    return '.';
-  }
-  const lastSlash = normalized.lastIndexOf('/');
-  if (lastSlash < 0) {
-    return '.';
-  }
-  if (lastSlash === 0) {
-    return '/';
-  }
-  return normalized.slice(0, lastSlash);
-}
-
-function joinRemotePath(parent: string, childName: string): string {
-  const safeChild = String(childName || '').replace(/^\/+/, '');
-  if (!safeChild) {
-    return parent || '.';
-  }
-  if (!parent || parent === '.') {
-    return safeChild;
-  }
-  if (parent === '/') {
-    return `/${safeChild}`;
-  }
-  return `${parent.replace(/\/+$/g, '')}/${safeChild}`;
-}
-
-function normalizePathForCompare(path: string): string {
-  const normalized = String(path || '.').replace(/\\/g, '/').replace(/\/+$/g, '');
-  if (!normalized || normalized === '.') {
-    return '.';
-  }
-  return normalized;
 }
 
 function buildIndexedCopyName(originalName: string, index: number, isDirectory: boolean): string {
@@ -214,6 +71,25 @@ export function registerFileFolderCommands() {
     }
     
     await service.downloadWithDialogs?.(item);
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.downloadFolderArchive', async (item: any) => {
+    const connection = resolveConnectionItem(item);
+    if (!connection) {
+      vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
+      return;
+    }
+    const service = await (Container.get('remoteServiceProvider') as RemoteServiceProvider).getRemoteService(connection.label) as RemoteService;
+    if (!service) {
+      return;
+    }
+
+    if (!service.downloadFolderArchiveWithDialogs) {
+      vscode.window.showErrorMessage(LangService.t('downloadArchiveNotSupported'));
+      return;
+    }
+
+    await service.downloadFolderArchiveWithDialogs(item);
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('remotix.upload', async (item: any) => {
@@ -354,7 +230,7 @@ export function registerFileFolderCommands() {
     };
 
     try {
-      await vscode.env.clipboard.writeText(serializeRemoteClipboard(remoteClipboard));
+      await vscode.env.clipboard.writeText(RemoteClipboardHelper.serializeRemoteClipboard(remoteClipboard));
     } catch {
     }
 
@@ -375,13 +251,13 @@ export function registerFileFolderCommands() {
 
     try {
       const rawClipboard = await vscode.env.clipboard.readText();
-      const systemClipboard = parseRemoteClipboard(rawClipboard);
+      const systemClipboard = RemoteClipboardHelper.parseRemoteClipboard(rawClipboard);
       if (systemClipboard) {
         remoteClipboard = systemClipboard;
       } else {
-        const plainPath = parsePlainClipboardPath(rawClipboard);
+        const plainPath = RemoteClipboardHelper.parsePlainClipboardPath(rawClipboard);
         if (plainPath) {
-          const plainClipboard = await buildClipboardFromPlainPath(plainPath, connection.label);
+          const plainClipboard = await RemoteClipboardHelper.buildClipboardFromPlainPath(plainPath, connection.label);
           if (plainClipboard) {
             remoteClipboard = plainClipboard;
           }
@@ -409,9 +285,9 @@ export function registerFileFolderCommands() {
     }
 
     const itemPath = getItemPath(item) || '.';
-    const destinationFolder = isDirectoryItem(item) ? itemPath : getParentPath(itemPath);
-    const sourceParentFolder = getParentPath(remoteClipboard.sourcePath);
-    const sameFolder = normalizePathForCompare(sourceParentFolder) === normalizePathForCompare(destinationFolder);
+    const destinationFolder = isDirectoryItem(item) ? itemPath : RemotePathHelper.getParentRemotePath(itemPath);
+    const sourceParentFolder = RemotePathHelper.getParentRemotePath(remoteClipboard.sourcePath);
+    const sameFolder = RemotePathHelper.normalizePathForCompare(sourceParentFolder) === RemotePathHelper.normalizePathForCompare(destinationFolder);
 
     let targetName = remoteClipboard.sourceName;
     if (sameFolder) {
@@ -451,7 +327,7 @@ export function registerFileFolderCommands() {
       return;
     }
 
-    const targetPath = joinRemotePath(destinationFolder, targetName);
+    const targetPath = RemotePathHelper.joinRemotePath(destinationFolder, targetName);
 
     try {
       await vscode.window.withProgress(

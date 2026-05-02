@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
 import { ConnectionItem } from './types';
+import { Container } from './services/Container';
 import { registerUiCommands } from './commands/ui';
 import { LangService } from './services/LangService';
 import { TreeDataProvider } from './ui/TreeDataProvider';
 import { ConfigService } from './services/ConfigService';
 import { registerFileFolderCommands } from './commands/files';
-import { registerConnectionCommands } from './commands/connections';
-import { Container } from './services/Container';
 import { ConnectionManager } from './services/ConnectionManager';
+import { registerConnectionCommands } from './commands/connections';
 import { RemoteServiceProvider } from './services/RemoteServiceProvider';
+import { RemoteFileEditService } from './services/RemoteFileEditService';
 
 function resolveLangFromSettings(): 'en' | 'uk' {
   const configured = vscode.workspace.getConfiguration('remotix').get<string>('language', 'auto');
@@ -69,6 +70,8 @@ export async function activate(context: vscode.ExtensionContext) {
   Container.set('connectionManager', connectionManager);
   const remoteServiceProvider = new RemoteServiceProvider();
   Container.set('remoteServiceProvider', remoteServiceProvider);
+  const remoteFileEditService = new RemoteFileEditService();
+  Container.set('remoteFileEditService', remoteFileEditService);
   const treeDataProvider = new TreeDataProvider();
   // Patch: load passwords from SecretStorage for all connections
   const patchConnectionsWithPasswords = async () => {

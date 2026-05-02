@@ -5,6 +5,16 @@ import { Container } from './Container';
 import { RemotixConfig } from '../types';
 
 export class ConfigService {
+  static getConcurrencyLimit(settingKey: string, defaultValue: number, min: number = 1, max: number = 10): number {
+    const configured = vscode.workspace.getConfiguration('remotix').get<number>(settingKey, defaultValue);
+    const numeric = Number(configured);
+    const fallback = Number(defaultValue);
+    const value = Number.isFinite(numeric) ? numeric : fallback;
+    const lowerBound = Number.isFinite(Number(min)) ? Number(min) : 1;
+    const upperBound = Number.isFinite(Number(max)) ? Number(max) : 10;
+    return Math.max(lowerBound, Math.min(upperBound, Math.floor(value)));
+  }
+
   private static async migratePasswordsFromConfigFile(configPath: string, source: 'global' | 'project'): Promise<number> {
     if (!fs.existsSync(configPath)) {
       return 0;

@@ -48,7 +48,8 @@
     "onCommand:remotix.copyItem",
     "onCommand:remotix.pasteItem",
     "onCommand:remotix.changePermissions",
-    "onCommand:remotix.showProperties"
+    "onCommand:remotix.showProperties",
+    "onCommand:remotix.downloadFolderArchive"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -92,6 +93,11 @@
         "command": "remotix.download",
         "title": "%command.download%",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "remotix.downloadFolderArchive",
+        "title": "%command.downloadFolderArchive%",
+        "icon": "$(package)"
       },
       {
         "command": "remotix.rename",
@@ -251,17 +257,22 @@
         {
           "command": "remotix.upload",
           "when": "view == remotixView && viewItem == ssh-folder",
-          "group": "3_transfer"
+          "group": "3_transfer@3"
         },
         {
           "command": "remotix.upload",
           "when": "view == remotixView && viewItem == ftp-folder",
-          "group": "3_transfer"
+          "group": "3_transfer@3"
         },
         {
           "command": "remotix.download",
           "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder || viewItem == ftp-file || viewItem == ftp-folder)",
-          "group": "3_transfer"
+          "group": "3_transfer@1"
+        },
+        {
+          "command": "remotix.downloadFolderArchive",
+          "when": "view == remotixView && viewItem == ssh-folder",
+          "group": "3_transfer@2"
         },
         {
           "command": "remotix.rename",

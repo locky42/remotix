@@ -2,7 +2,10 @@ export class Container {
     private static instances: Map<string, any> = new Map();
 
     public static get<T>(key: string): T {
-        return this.instances.get(key);
+        if (!this.has(key)) {
+            throw new Error(`Container dependency is not registered: ${key}`);
+        }
+        return this.instances.get(key) as T;
     }
 
     public static set<T>(key: string, instance: T): void {

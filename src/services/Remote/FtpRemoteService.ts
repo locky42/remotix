@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { Container } from '../Container';
+import { AsyncMutex } from '../AsyncMutex';
 import { LangService } from '../LangService';
 import { RemoteService } from './RemoteService';
 import { Client as FtpClient } from 'basic-ftp';
@@ -7,34 +8,24 @@ import { LoggerService } from '../LoggerService';
 import { ConfigService } from '../ConfigService';
 import { SessionProvider } from '../SessionProvider';
 import { TreeDataProvider } from '../../ui/TreeDataProvider';
+import { RemoteFileEditService } from '../RemoteFileEditService';
+import { PermissionHelper } from '../../helpers/PermissionHelper';
 import { RemotePathHelper } from '../../helpers/RemotePathHelper';
+import { RemoteRefreshHelper } from '../../helpers/RemoteRefreshHelper';
+import { RemoteTreeViewHelper } from '../../helpers/RemoteTreeViewHelper';
+import { RemoteCrudDialogHelper } from '../../helpers/RemoteCrudDialogHelper';
+import { PropertiesFormatHelper } from '../../helpers/PropertiesFormatHelper';
+import { PropertiesDialogHelper } from '../../helpers/PropertiesDialogHelper';
 import { ConnectionItem, PermissionApplyTarget, PermissionChangeOptions } from '../../types';
-
-// Simple async mutex for serializing FTP operations
-class AsyncMutex {
-  private _lock: Promise<void> = Promise.resolve();
-  private _isLocked = false;
-  async acquire<T>(fn: () => Promise<T>): Promise<T> {
-    let release: () => void;
-    const willLock = new Promise<void>(resolve => (release = resolve));
-    const prev = this._lock;
-    this._lock = this._lock.then(() => willLock);
-    await prev;
-    this._isLocked = true;
-    try {
-      return await fn();
-    } finally {
-      this._isLocked = false;
-      release!();
-    }
-  }
-  get isLocked() { return this._isLocked; }
-}
 
 export class FtpRemoteService implements RemoteService {
   private connection: ConnectionItem;
   private _mutex = new AsyncMutex();
   private initialPath: string = '/';
+
+  private getRemoteFileEditService(): RemoteFileEditService {
+    return Container.get<RemoteFileEditService>('remoteFileEditService');
+  }
 
   constructor(connection: ConnectionItem) {
     this.connection = connection;
@@ -42,81 +33,7 @@ export class FtpRemoteService implements RemoteService {
     LoggerService.log('[FTP] FtpRemoteService instance created.');
   }
 
-  private getParentRemotePath(remotePath: string): string {
-    const normalized = RemotePathHelper.normalizeRemotePath(remotePath).replace(/\/+$/g, '');
-    if (!normalized || normalized === '.') {
-      return '.';
-    }
-    const lastSlash = normalized.lastIndexOf('/');
-    if (lastSlash < 0) {
-      return '.';
-    }
-    if (lastSlash === 0) {
-      return '/';
-    }
-    return normalized.slice(0, lastSlash);
-  }
-
-  private toAbsoluteRemotePath(remotePath: string): string {
-    const normalizedInput = (remotePath || '.').replace(/\\/g, '/').trim();
-    if (!normalizedInput || normalizedInput === '.') {
-      return (this.initialPath || '/').replace(/\/+/g, '/');
-    }
-    if (normalizedInput.startsWith('/')) {
-      return normalizedInput.replace(/\/+/g, '/');
-    }
-    const base = (this.initialPath || '/').replace(/\/$/, '');
-    return `${base}/${normalizedInput}`.replace(/\/+/g, '/');
-  }
-
-  private normalizeRemoteLeafName(rawName: string): string {
-    const normalized = String(rawName || '').replace(/\\/g, '/').trim();
-    if (!normalized) {
-      return '';
-    }
-    const parts = normalized.split('/').filter(Boolean);
-    return parts.length > 0 ? parts[parts.length - 1] : normalized;
-  }
-
-  private refreshFolder(treeDataProvider: TreeDataProvider, folderPath: string): void {
-    treeDataProvider.refreshRemoteFolder(this.connection.label, RemotePathHelper.normalizeRemotePath(folderPath), 'ftp');
-  }
-
-  private getUploadConcurrencyLimit(): number {
-    const configured = vscode.workspace.getConfiguration('remotix').get<number>('ftpUploadConcurrency', 3);
-    const value = Number.isFinite(configured as number) ? Number(configured) : 3;
-    return Math.max(1, Math.min(10, Math.floor(value)));
-  }
-
-  private getDownloadConcurrencyLimit(): number {
-    const configured = vscode.workspace.getConfiguration('remotix').get<number>('ftpDownloadConcurrency', 3);
-    const value = Number.isFinite(configured as number) ? Number(configured) : 3;
-    return Math.max(1, Math.min(10, Math.floor(value)));
-  }
-
-  private getDeleteFileConcurrencyLimit(): number {
-    const configured = vscode.workspace.getConfiguration('remotix').get<number>('ftpDeleteFileConcurrency', 4);
-    const value = Number.isFinite(configured as number) ? Number(configured) : 4;
-    return Math.max(1, Math.min(10, Math.floor(value)));
-  }
-
-  private normalizePermissionMode(rawMode: string): string | undefined {
-    const value = String(rawMode || '').trim();
-    if (!/^[0-7]{3,4}$/.test(value)) {
-      return undefined;
-    }
-    return value;
-  }
-
-  private parsePermissionTripletToOctal(triplet: string): number {
-    let value = 0;
-    if (triplet[0] === 'r') value += 4;
-    if (triplet[1] === 'w') value += 2;
-    if (triplet[2] === 'x' || triplet[2] === 's' || triplet[2] === 't') value += 1;
-    return value;
-  }
-
-  private detectModeFromFtpEntry(fileEntry: any): string | undefined {
+  public detectModeFromEntry(fileEntry: any): string | undefined {
     const perms = fileEntry?.permissions;
     if (perms && typeof perms === 'object') {
       const user = Number(perms.user);
@@ -128,53 +45,21 @@ export class FtpRemoteService implements RemoteService {
     }
 
     if (typeof perms === 'string' && perms.length >= 9) {
-      const block = perms.length >= 10 ? perms.slice(-9) : perms;
-      const owner = this.parsePermissionTripletToOctal(block.slice(0, 3));
-      const group = this.parsePermissionTripletToOctal(block.slice(3, 6));
-      const world = this.parsePermissionTripletToOctal(block.slice(6, 9));
-      return `${owner}${group}${world}`;
+      return PermissionHelper.parsePermissionBlockToMode(perms);
     }
 
     return undefined;
   }
 
-  private formatPropertiesDate(value: any): string {
-    if (value === undefined || value === null || value === '') {
-      return LangService.t('propertiesUnknown');
-    }
-
-    if (typeof value === 'number' && value <= 0) {
-      return LangService.t('propertiesUnknown');
-    }
-
-    const date = value instanceof Date ? value : new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return LangService.t('propertiesUnknown');
-    }
-
-    return date.toLocaleString();
-  }
-
-  private formatPropertiesSize(size: number | undefined, isDirectory: boolean): string {
-    if (isDirectory) {
-      return '-';
-    }
-    if (!Number.isFinite(size as number)) {
-      return LangService.t('propertiesUnknown');
-    }
-    return `${size} B`;
-  }
-
   async showPropertiesWithDialogs(item: any): Promise<void> {
-    const remotePath = String(item?.ftpPath || item?.sshPath || '').trim();
+    const remotePath = PropertiesDialogHelper.getRemotePathOrNotify(item);
     if (!remotePath) {
-      vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
       return;
     }
 
-    const absolutePath = this.toAbsoluteRemotePath(remotePath);
+    const absolutePath = RemotePathHelper.toAbsoluteRemotePath(remotePath, this.initialPath);
     const isDirectoryFromItem = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder';
-    const leafName = this.normalizeRemoteLeafName(absolutePath) || absolutePath;
+    const leafName = PropertiesDialogHelper.getLeafName(absolutePath);
 
     try {
       const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
@@ -184,34 +69,30 @@ export class FtpRemoteService implements RemoteService {
 
       let entry: any | undefined;
       if (absolutePath !== '/') {
-        const parentPath = this.getParentRemotePath(absolutePath);
+        const parentPath = RemotePathHelper.getParentRemotePath(absolutePath);
         const list = await session.list(parentPath);
-        entry = list.find((candidate: any) => this.normalizeRemoteLeafName(candidate?.name) === leafName);
+        entry = list.find((candidate: any) => RemotePathHelper.getRemoteLeafName(candidate?.name) === leafName);
       }
 
       const isDirectory = entry
         ? entry.type === 2
         : isDirectoryFromItem;
-      const permissions = this.normalizePermissionMode(String(item?.permissionMode || ''))
-        || this.detectModeFromFtpEntry(entry)
+      const permissions = PermissionHelper.normalizePermissionMode(String(item?.permissionMode || ''))
+        || this.detectModeFromEntry(entry)
         || LangService.t('propertiesUnknown');
 
       const items: vscode.QuickPickItem[] = [
         { label: LangService.t('propertiesPath'), description: absolutePath },
         { label: LangService.t('propertiesType'), description: isDirectory ? LangService.t('propertiesDirectory') : LangService.t('propertiesFile') },
         { label: LangService.t('propertiesPermissions'), description: permissions },
-        { label: LangService.t('propertiesSize'), description: this.formatPropertiesSize(entry?.size, isDirectory) },
+        { label: LangService.t('propertiesSize'), description: PropertiesFormatHelper.formatSize(entry?.size, isDirectory, LangService.t('propertiesUnknown')) },
         { label: LangService.t('propertiesOwner'), description: entry?.user ? String(entry.user) : LangService.t('propertiesUnknown') },
         { label: LangService.t('propertiesGroup'), description: entry?.group ? String(entry.group) : LangService.t('propertiesUnknown') },
-        { label: LangService.t('propertiesCreated'), description: this.formatPropertiesDate(entry?.createdAt || entry?.rawCreatedAt || entry?.created) },
-        { label: LangService.t('propertiesModified'), description: this.formatPropertiesDate(entry?.modifiedAt || entry?.rawModifiedAt) },
+        { label: LangService.t('propertiesCreated'), description: PropertiesFormatHelper.formatDate(entry?.createdAt || entry?.rawCreatedAt || entry?.created, LangService.t('propertiesUnknown')) },
+        { label: LangService.t('propertiesModified'), description: PropertiesFormatHelper.formatDate(entry?.modifiedAt || entry?.rawModifiedAt, LangService.t('propertiesUnknown')) },
       ];
 
-      await vscode.window.showQuickPick(items, {
-        title: LangService.t('propertiesTitle', { name: leafName }),
-        placeHolder: absolutePath,
-        ignoreFocusOut: true,
-      });
+      await PropertiesDialogHelper.showPropertiesQuickPick(absolutePath, leafName, items);
     } catch (error: any) {
       vscode.window.showErrorMessage(LangService.t('propertiesLoadFailed', {
         error: error instanceof Error ? error.message : String(error)
@@ -220,7 +101,7 @@ export class FtpRemoteService implements RemoteService {
   }
 
   private async applyFtpChmod(client: FtpClient, remotePath: string, mode: string): Promise<void> {
-    const absolutePath = this.toAbsoluteRemotePath(remotePath);
+    const absolutePath = RemotePathHelper.toAbsoluteRemotePath(remotePath, this.initialPath);
     let lastError: any;
     const primaryCommand = `SITE CHMOD ${mode} ${absolutePath}`;
     try {
@@ -234,8 +115,8 @@ export class FtpRemoteService implements RemoteService {
     }
 
     // Fallback for servers that only allow chmod by leaf name in parent cwd.
-    const parentPath = this.getParentRemotePath(absolutePath);
-    const leafName = this.normalizeRemoteLeafName(absolutePath);
+    const parentPath = RemotePathHelper.getParentRemotePath(absolutePath);
+    const leafName = RemotePathHelper.getRemoteLeafName(absolutePath);
     if (leafName) {
       const previousDir = await client.pwd().catch(() => '/');
       try {
@@ -272,11 +153,11 @@ export class FtpRemoteService implements RemoteService {
     applyTo: PermissionApplyTarget,
     stats: { files: number; dirs: number }
   ): Promise<void> {
-    const absoluteDir = this.toAbsoluteRemotePath(remoteDir);
+    const absoluteDir = RemotePathHelper.toAbsoluteRemotePath(remoteDir, this.initialPath);
     const list = await client.list(absoluteDir);
 
     for (const entry of list) {
-      const leafName = this.normalizeRemoteLeafName((entry as any)?.name);
+      const leafName = RemotePathHelper.getRemoteLeafName((entry as any)?.name);
       if (!leafName || leafName === '.' || leafName === '..') {
         continue;
       }
@@ -310,12 +191,12 @@ export class FtpRemoteService implements RemoteService {
     }
 
     const isDirectory = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder';
-    const currentMode = this.normalizePermissionMode(String(item?.permissionMode || ''));
+    const currentMode = PermissionHelper.normalizePermissionMode(String(item?.permissionMode || ''));
     const modeInput = await vscode.window.showInputBox({
       prompt: LangService.t('enterPermissionMode'),
       placeHolder: LangService.t('permissionModePlaceholder'),
       value: currentMode || (isDirectory ? '755' : '644'),
-      validateInput: (value) => this.normalizePermissionMode(value)
+      validateInput: (value) => PermissionHelper.normalizePermissionMode(value)
         ? undefined
         : LangService.t('invalidPermissionMode')
     });
@@ -323,7 +204,7 @@ export class FtpRemoteService implements RemoteService {
       return;
     }
 
-    const mode = this.normalizePermissionMode(modeInput);
+    const mode = PermissionHelper.normalizePermissionMode(modeInput);
     if (!mode) {
       vscode.window.showErrorMessage(LangService.t('invalidPermissionMode'));
       return;
@@ -363,8 +244,8 @@ export class FtpRemoteService implements RemoteService {
 
     try {
       await this.changePermissions(remotePath, { mode, recursive, applyTo });
-      const refreshPath = isDirectory ? remotePath : this.getParentRemotePath(remotePath);
-      this.refreshFolder(treeDataProvider, refreshPath);
+      const refreshPath = isDirectory ? remotePath : RemotePathHelper.getParentRemotePath(remotePath);
+      RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ftp');
       vscode.window.showInformationMessage(LangService.t('permissionsChanged', { path: remotePath, mode }));
     } catch (error: any) {
       vscode.window.showErrorMessage(LangService.t('changePermissionsFailed', {
@@ -374,7 +255,7 @@ export class FtpRemoteService implements RemoteService {
   }
 
   async changePermissions(remotePath: string, options: PermissionChangeOptions): Promise<void> {
-    const mode = this.normalizePermissionMode(options.mode);
+    const mode = PermissionHelper.normalizePermissionMode(options.mode);
     if (!mode) {
       throw new Error(LangService.t('invalidPermissionMode'));
     }
@@ -385,7 +266,7 @@ export class FtpRemoteService implements RemoteService {
         throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
       }
 
-      const absolutePath = this.toAbsoluteRemotePath(remotePath);
+      const absolutePath = RemotePathHelper.toAbsoluteRemotePath(remotePath, this.initialPath);
       LoggerService.log(`[FTP][CHMOD] START mode=${mode} recursive=${String(options.recursive)} target=${options.applyTo} path=${absolutePath}`);
 
       if (!options.recursive) {
@@ -494,40 +375,7 @@ export class FtpRemoteService implements RemoteService {
         }
 
         if (path === '.') {
-          const parts = this.initialPath.split('/').filter(p => p);
-          
-          const rootItem = new vscode.TreeItem('/', vscode.TreeItemCollapsibleState.Expanded);
-          (rootItem as any).ftpPath = '/';
-          (rootItem as any).connectionLabel = this.connection.label;
-          rootItem.contextValue = 'ftp-folder';
-          rootItem.iconPath = new vscode.ThemeIcon('folder');
-
-          let currentParent = rootItem;
-          let currentPath = '';
-
-          for (let i = 0; i < parts.length; i++) {
-            const part = parts[i];
-            currentPath += '/' + part;
-            const isLast = i === parts.length - 1;
-
-            const item = new vscode.TreeItem(part, vscode.TreeItemCollapsibleState.Expanded);
-            
-            (item as any).ftpPath = currentPath;
-            (item as any).connectionLabel = this.connection.label;
-            item.contextValue = 'ftp-folder';
-            item.iconPath = new vscode.ThemeIcon('folder');
-
-            (currentParent as any).children = [item];
-
-            if (!isLast) {
-              currentParent = item;
-            } else {
-              delete (item as any).children;
-              LoggerService.log(`[FTP][DEBUG] Virtual path built to: ${currentPath}`);
-            }
-          }
-
-          return [rootItem];
+          return RemoteTreeViewHelper.buildVirtualPathTree(this.initialPath, this.connection.label, 'ftpPath', 'ftp-folder');
         }
 
         let requestPath = RemotePathHelper.normalizeAbsolutePath(path);
@@ -541,25 +389,22 @@ export class FtpRemoteService implements RemoteService {
             
             vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: err.message }));
 
-            const parts = this.initialPath.split('/').filter(p => p);
-            const currentParts = requestPath === '/' ? [] : requestPath.split('/').filter(p => p);
-            const nextPart = parts[currentParts.length];
-
-            if (nextPart) {
-              const nextPath = requestPath === '/' ? `/${nextPart}` : `${requestPath}/${nextPart}`;
-              const virtualItem = new vscode.TreeItem(nextPart, vscode.TreeItemCollapsibleState.Expanded);
-              (virtualItem as any).ftpPath = nextPath;
-              (virtualItem as any).connectionLabel = this.connection.label;
-              virtualItem.contextValue = 'ftp-folder';
-              virtualItem.iconPath = new vscode.ThemeIcon('folder');
-              return [virtualItem];
+            const virtualItems = RemoteTreeViewHelper.buildPermissionDeniedVirtualChild(
+              this.initialPath,
+              requestPath,
+              this.connection.label,
+              'ftpPath',
+              'ftp-folder'
+            );
+            if (virtualItems) {
+              return virtualItems;
             }
           }
           throw err;
         }
 
         const items = list
-          .map((item) => ({ ...item, __leafName: this.normalizeRemoteLeafName(item.name) }))
+          .map((item) => ({ ...item, __leafName: RemotePathHelper.getRemoteLeafName(item.name) }))
           .filter((item: any) => item.__leafName && item.__leafName !== '.' && item.__leafName !== '..')
           .map((item: any) => {
             const isFile = item.type === 1;
@@ -579,7 +424,7 @@ export class FtpRemoteService implements RemoteService {
             
             (treeItem as any).ftpPath = absoluteFtpPath;
             (treeItem as any).connectionLabel = this.connection.label;
-            (treeItem as any).permissionMode = this.detectModeFromFtpEntry(item);
+            (treeItem as any).permissionMode = this.detectModeFromEntry(item);
 
             if (isDir) {
               treeItem.iconPath = new vscode.ThemeIcon('folder');
@@ -609,12 +454,7 @@ export class FtpRemoteService implements RemoteService {
             return treeItem;
           });
 
-        items.sort((a, b) => {
-          const isADir = a.collapsibleState !== vscode.TreeItemCollapsibleState.None;
-          const isBDir = b.collapsibleState !== vscode.TreeItemCollapsibleState.None;
-          if (isADir !== isBDir) return isADir ? -1 : 1;
-          return (a.label as string).localeCompare(b.label as string, 'uk');
-        });
+        RemoteTreeViewHelper.sortTreeItems(items, 'uk');
 
         LoggerService.log(`[FTP][DEBUG] Returning ${items.length} tree items. EXIT`);
         LoggerService.log('==============================');
@@ -716,7 +556,7 @@ export class FtpRemoteService implements RemoteService {
         await collectFiles(remoteDir, localDest);
         LoggerService.log(`[FTP][DOWNLOAD DIR] QUEUE built: ${filesToDownload.length} files`);
 
-        const CONCURRENCY_LIMIT = this.getDownloadConcurrencyLimit();
+        const CONCURRENCY_LIMIT = ConfigService.getConcurrencyLimit('ftpDownloadConcurrency', 3);
         const queue = [...filesToDownload];
         let downloadedCount = 0;
 
@@ -763,6 +603,12 @@ export class FtpRemoteService implements RemoteService {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
     const targetPath = item?.sshPath || item?.ftpPath;
     LoggerService.log(`[FTP][UPLOAD] START dialog target=${targetPath || 'unknown'}`);
+    if (!targetPath) {
+      vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
+      LoggerService.log('[FTP][UPLOAD] END fail: missing target path');
+      return;
+    }
+
     const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
     if (!session) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -828,8 +674,8 @@ export class FtpRemoteService implements RemoteService {
     }
     const refreshPath = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder'
       ? targetPath
-      : this.getParentRemotePath(targetPath);
-    this.refreshFolder(treeDataProvider, refreshPath);
+      : RemotePathHelper.getParentRemotePath(targetPath);
+    RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ftp');
   }
 
   async upload(localPath: string, remotePath: string): Promise<void> {
@@ -925,7 +771,7 @@ export class FtpRemoteService implements RemoteService {
           }
         }
 
-        const CONCURRENCY_LIMIT = this.getUploadConcurrencyLimit();
+        const CONCURRENCY_LIMIT = ConfigService.getConcurrencyLimit('ftpUploadConcurrency', 3);
         const queue = [...fileJobs];
         let uploadedCount = 0;
 
@@ -977,7 +823,7 @@ export class FtpRemoteService implements RemoteService {
   async createFileWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
 
-    const ftpPath = item?.ftpPath || item?.sshPath;
+    const ftpPath = RemoteCrudDialogHelper.getRemotePath(item);
     if (!ftpPath) {
       vscode.window.showErrorMessage(LangService.t('ftpNoFolderForFile'));
       return;
@@ -987,19 +833,12 @@ export class FtpRemoteService implements RemoteService {
       value: LangService.t('defaultNewFileName')
     });
     if (!newFileName) return;
-    let newFilePath: string;
-    if (item?.contextValue === 'ssh-folder' || item?.contextValue === 'ftp-folder') {
-      newFilePath = (ftpPath.endsWith('/') ? ftpPath : ftpPath + '/') + newFileName;
-    } else {
-      newFilePath = ftpPath.replace(/\/[^/]*$/, '') + '/' + newFileName;
-    }
+    const newFilePath = RemoteCrudDialogHelper.buildChildPath(ftpPath, item, newFileName);
     try {
       await this.createFile(newFilePath);
       vscode.window.showInformationMessage(LangService.t('fileCreated', { path: newFilePath }));
-      const refreshPath = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder'
-        ? ftpPath
-        : this.getParentRemotePath(ftpPath);
-      this.refreshFolder(treeDataProvider, refreshPath);
+      const refreshPath = RemoteCrudDialogHelper.getRefreshPath(item, ftpPath);
+      RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ftp');
     } catch (e: any) {
       vscode.window.showErrorMessage(LangService.t('createFileFailed', { error: (e instanceof Error ? e.message : String(e)) }));
     }
@@ -1046,7 +885,11 @@ export class FtpRemoteService implements RemoteService {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
     LoggerService.log('[FTP][createFolderWithDialogs] ENTRY');
     LoggerService.logObject('[FTP][createFolderWithDialogs] item', item);
-    const ftpPath = item?.ftpPath || item?.sshPath;
+    const ftpPath = RemoteCrudDialogHelper.getRemotePath(item);
+    if (!ftpPath) {
+      vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
+      return;
+    }
     LoggerService.log(`[FTP][createFolderWithDialogs] ftpPath: ${ftpPath}`);
     const newFolderName = await vscode.window.showInputBox({
       prompt: LangService.t('enterNewFolderName'),
@@ -1057,12 +900,7 @@ export class FtpRemoteService implements RemoteService {
       LoggerService.log('[FTP][createFolderWithDialogs] No folder name entered, aborting');
       return;
     }
-    let newFolderPath: string;
-    if (item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder') {
-      newFolderPath = (ftpPath.endsWith('/') ? ftpPath : ftpPath + '/') + newFolderName;
-    } else {
-      newFolderPath = ftpPath.replace(/\/[^/]*$/, '') + '/' + newFolderName;
-    }
+    const newFolderPath = RemoteCrudDialogHelper.buildChildPath(ftpPath, item, newFolderName);
     LoggerService.log(`[FTP][createFolderWithDialogs] newFolderPath: ${newFolderPath}`);
     try {
       await this.createFolder(newFolderPath);
@@ -1072,10 +910,8 @@ export class FtpRemoteService implements RemoteService {
         LoggerService.log('[FTP][createFolderWithDialogs] Clearing remoteServiceCache');
         treeDataProvider.clearRemoteServiceCache(this.connection.label);
       }
-      const refreshPath = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder'
-        ? ftpPath
-        : this.getParentRemotePath(ftpPath);
-      this.refreshFolder(treeDataProvider, refreshPath);
+      const refreshPath = RemoteCrudDialogHelper.getRefreshPath(item, ftpPath);
+      RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ftp');
       LoggerService.log('[FTP][createFolderWithDialogs] folder-level refresh called');
     } catch (e: any) {
       LoggerService.log(`[FTP][createFolderWithDialogs] ERROR: ${e instanceof Error ? e.message : String(e)}`);
@@ -1124,8 +960,12 @@ export class FtpRemoteService implements RemoteService {
 
   async deleteFileWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
-    const ftpPath = item?.ftpPath || item?.sshPath;
-    const isDir = item.contextValue === 'ftp-folder' || item.contextValue === 'ssh-folder';
+    const ftpPath = RemoteCrudDialogHelper.getRemotePath(item);
+    if (!ftpPath) {
+      vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
+      return;
+    }
+    const isDir = RemoteCrudDialogHelper.isDirectoryItem(item);
     const confirm = await vscode.window.showWarningMessage(
       LangService.t(isDir ? 'confirmDeleteFolder' : 'confirmDeleteFile', { path: ftpPath }),
       { modal: true },
@@ -1142,7 +982,7 @@ export class FtpRemoteService implements RemoteService {
         await this.deleteFile(ftpPath);
         vscode.window.showInformationMessage(LangService.t('fileDeleted', { path: ftpPath }));
       }
-      this.refreshFolder(treeDataProvider, this.getParentRemotePath(ftpPath));
+      RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, RemotePathHelper.getParentRemotePath(ftpPath), 'ftp');
       LoggerService.log(`[FTP][DELETE] END success type=${isDir ? 'directory' : 'file'} path=${ftpPath}`);
     } catch (e: any) {
       LoggerService.log(`[FTP][DELETE] END fail type=${isDir ? 'directory' : 'file'} path=${ftpPath} error=${e instanceof Error ? e.message : String(e)}`);
@@ -1160,7 +1000,7 @@ export class FtpRemoteService implements RemoteService {
         throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
       }
 
-      const absolutePath = this.toAbsoluteRemotePath(remotePath);
+      const absolutePath = RemotePathHelper.toAbsoluteRemotePath(remotePath, this.initialPath);
       LoggerService.log(`[FTP][DELETE FILE] START: ${remotePath} (absolute=${absolutePath})`);
 
       try {
@@ -1181,7 +1021,7 @@ export class FtpRemoteService implements RemoteService {
         throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
       }
 
-      const absoluteRemoteDir = this.toAbsoluteRemotePath(remoteDir);
+      const absoluteRemoteDir = RemotePathHelper.toAbsoluteRemotePath(remoteDir, this.initialPath);
       LoggerService.log(`[FTP][DELETE DIR] START: ${remoteDir} (absolute=${absoluteRemoteDir})`);
 
       // Prefer server-side recursive delete first on a separate client with timeout.
@@ -1243,9 +1083,8 @@ export class FtpRemoteService implements RemoteService {
 
   async renameWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
-    const labelStr = typeof item.label === 'string' ? item.label : (item.label && typeof item.label.label === 'string' ? item.label.label : String(item.label));
-    const oldLabel = labelStr;
-    const ftpPath = item.ftpPath || item.sshPath;
+    const oldLabel = RemoteCrudDialogHelper.getItemLabel(item);
+    const ftpPath = RemoteCrudDialogHelper.getRemotePath(item);
     if (!ftpPath) {
       vscode.window.showErrorMessage(LangService.t('missingSshPathOrConnectionLabel'));
       return;
@@ -1261,15 +1100,15 @@ export class FtpRemoteService implements RemoteService {
       return;
     }
     const oldPath = ftpPath;
-    const newPath = oldPath.replace(/[^/]+$/, newName);
+    const newPath = RemoteCrudDialogHelper.buildRenamedPath(oldPath, newName);
     try {
       await this.rename(oldPath, newPath);
       vscode.window.showInformationMessage(LangService.t('renamedTo', { name: newName }));
-      const oldParent = this.getParentRemotePath(oldPath);
-      const newParent = this.getParentRemotePath(newPath);
-      this.refreshFolder(treeDataProvider, oldParent);
+      const oldParent = RemotePathHelper.getParentRemotePath(oldPath);
+      const newParent = RemotePathHelper.getParentRemotePath(newPath);
+      RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, oldParent, 'ftp');
       if (newParent !== oldParent) {
-        this.refreshFolder(treeDataProvider, newParent);
+        RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, newParent, 'ftp');
       }
     } catch (e: any) {
       vscode.window.showErrorMessage(LangService.t('renameFailed', { error: (e instanceof Error ? e.message : String(e)) }));
@@ -1308,8 +1147,8 @@ export class FtpRemoteService implements RemoteService {
       const fs = require('fs');
       const os = require('os');
       const pathMod = require('path');
-      const source = this.toAbsoluteRemotePath(sourceRemotePath);
-      const target = this.toAbsoluteRemotePath(targetRemotePath);
+      const source = RemotePathHelper.toAbsoluteRemotePath(sourceRemotePath, this.initialPath);
+      const target = RemotePathHelper.toAbsoluteRemotePath(targetRemotePath, this.initialPath);
       const tmpRoot = pathMod.join(os.tmpdir(), `remotix_copy_${Date.now()}_${Math.random().toString(16).slice(2)}`);
       const recentCopiedFiles: string[] = [];
       const recentLimit = 4;
@@ -1323,7 +1162,7 @@ export class FtpRemoteService implements RemoteService {
 
       const updateCopyStatus = (targetFile: string): void => {
         copiedFileCount += 1;
-        const displayName = this.normalizeRemoteLeafName(targetFile) || targetFile;
+        const displayName = RemotePathHelper.getRemoteLeafName(targetFile) || targetFile;
         recentCopiedFiles.unshift(displayName);
         if (recentCopiedFiles.length > recentLimit) {
           recentCopiedFiles.length = recentLimit;
@@ -1362,12 +1201,12 @@ export class FtpRemoteService implements RemoteService {
         await ensureRemoteDir(targetDir);
         const list = await session.list(sourceDir);
         const entries = list.filter((entry: any) => {
-          const leafName = this.normalizeRemoteLeafName(entry.name);
+          const leafName = RemotePathHelper.getRemoteLeafName(entry.name);
           return leafName !== '.' && leafName !== '..';
         });
 
         for (const entry of entries) {
-          const leafName = this.normalizeRemoteLeafName(entry.name);
+          const leafName = RemotePathHelper.getRemoteLeafName(entry.name);
           const sourceEntryPath = sourceDir.endsWith('/') ? `${sourceDir}${leafName}` : `${sourceDir}/${leafName}`;
           const targetEntryPath = targetDir.endsWith('/') ? `${targetDir}${leafName}` : `${targetDir}/${leafName}`;
           if (entry.type === 2) {
@@ -1382,7 +1221,7 @@ export class FtpRemoteService implements RemoteService {
 
       try {
         await fs.promises.mkdir(tmpRoot, { recursive: true });
-        setPersistentStatus(`Remotix: Copy started... ${this.normalizeRemoteLeafName(source)} -> ${this.normalizeRemoteLeafName(target)}`);
+        setPersistentStatus(`Remotix: Copy started... ${RemotePathHelper.getRemoteLeafName(source)} -> ${RemotePathHelper.getRemoteLeafName(target)}`);
         if (isDirectory) {
           await copyDirectoryRecursive(source, target);
         } else {
@@ -1428,66 +1267,37 @@ export class FtpRemoteService implements RemoteService {
         return;
       }
 
-      const os = require('os');
-      const pathMod = require('path');
-      const fs = require('fs');
-
-      const tmp = os.tmpdir();
-      const safeHost = (this.connection.host ?? 'unknown').replace(/[^\w]/g, '_');
-      const safeRelPath = ftpPath.replace(/^\/+/, '').split('/').map((p: string) => p.replace(/[^\w.\-]/g, '_')).join(pathMod.sep);
-      
-      const tmpDir = pathMod.join(tmp, `remotix_ftp_${safeHost}`);
-      const tmpFile = pathMod.join(tmpDir, safeRelPath);
-
       try {
-        fs.mkdirSync(pathMod.dirname(tmpFile), { recursive: true });
-
         if (treeDataProvider?.treeLocker) {
           treeDataProvider.treeLocker.lock(LangService.t('downloadingFile'), this.connection.label);
         }
 
-        const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
-        if (!session || (session as any).closed) {
-          throw new Error('FTP session not initialized or connection closed');
-        }
-
-        LoggerService.log(`[FTP] Downloading for edit: ${ftpPath} -> ${tmpFile}`);
-        await session.downloadTo(tmpFile, ftpPath);
-
-        const doc = await vscode.workspace.openTextDocument(tmpFile);
-        await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Active });
-
-        vscode.window.setStatusBarMessage(LangService.t('remoteFile', {
-          user: this.connection.user ?? '',
-          host: this.connection.host ?? '',
-          path: ftpPath
-        }), 5000);
-
-        const saveListener = vscode.workspace.onDidSaveTextDocument(async (savedDoc) => {
-          if (savedDoc.fileName === tmpFile) {
-            try {
-              const session2 = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
-              if (!session2 || (session2 as any).closed) throw new Error('Connection lost');
-              
-              LoggerService.log(`[FTP] Uploading changes: ${tmpFile} -> ${ftpPath}`);
-              await session2.uploadFrom(tmpFile, ftpPath);
-              vscode.window.setStatusBarMessage(LangService.t('fileSavedToServer'), 2000);
-            } catch (e: any) {
-              vscode.window.showErrorMessage(LangService.t('fileUploadError', { error: e.message }));
+        await this.getRemoteFileEditService().openWithTempFile({
+          remotePath: ftpPath,
+          host: this.connection.host,
+          user: this.connection.user,
+          tmpFolderPrefix: 'remotix_ftp',
+          downloadToTemp: async (tmpFile) => {
+            const activeSession = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
+            if (!activeSession || (activeSession as any).closed) {
+              throw new Error('FTP session not initialized or connection closed');
             }
-          }
-        });
 
-        const closeListener = vscode.workspace.onDidCloseTextDocument((closedDoc) => {
-          if (closedDoc.fileName === tmpFile) {
-            saveListener.dispose();
-            closeListener.dispose();
-            try {
-              if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
-            } catch (err) {
-              LoggerService.log(`[FTP] Temp file cleanup error: ${err}`);
+            LoggerService.log(`[FTP] Downloading for edit: ${ftpPath} -> ${tmpFile}`);
+            await activeSession.downloadTo(tmpFile, ftpPath);
+          },
+          uploadFromTemp: async (tmpFile) => {
+            const session2 = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
+            if (!session2 || (session2 as any).closed) {
+              throw new Error('Connection lost');
             }
-          }
+
+            LoggerService.log(`[FTP] Uploading changes: ${tmpFile} -> ${ftpPath}`);
+            await session2.uploadFrom(tmpFile, ftpPath);
+          },
+          logCleanupError: (cleanupError) => {
+            LoggerService.log(`[FTP] Temp file cleanup error: ${String(cleanupError)}`);
+          },
         });
 
       } catch (e: any) {
@@ -1540,7 +1350,7 @@ export class FtpRemoteService implements RemoteService {
       }
 
       if (treeDataProvider?.refresh) {
-        this.refreshFolder(treeDataProvider, targetFolder);
+        RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, targetFolder, 'ftp');
       }
       
       if (!hadError) {
@@ -1584,20 +1394,11 @@ export class FtpRemoteService implements RemoteService {
     LoggerService.log(`[FTP][DELETE DIR][ENTER] ${targetPath}`);
     const list = await withOpTimeout(session.list(targetPath), 5000, `list(${targetPath})`);
     LoggerService.log(`[FTP][DELETE DIR][LIST] ${targetPath} -> ${list.length} items`);
-    const normalizeLeafName = (rawName: string): string => {
-      const normalized = String(rawName || '').replace(/\\/g, '/').trim();
-      if (!normalized) {
-        return '';
-      }
-      const parts = normalized.split('/').filter(Boolean);
-      return parts.length > 0 ? parts[parts.length - 1] : normalized;
-    };
-
     const filePathsToDelete: string[] = [];
     const directoryEntries: Array<{ item: any; fullPath: string; normalizedFull: string; rootOccurences: number; dirId: string }> = [];
 
     for (const item of list) {
-      const leafName = normalizeLeafName(item.name);
+      const leafName = RemotePathHelper.getRemoteLeafName(item.name);
       if (!leafName || leafName === '.' || leafName === '..') continue;
       const fullPath = targetPath.endsWith('/') 
         ? targetPath + leafName 
@@ -1615,7 +1416,7 @@ export class FtpRemoteService implements RemoteService {
 
     if (filePathsToDelete.length > 0) {
       const queue = [...filePathsToDelete];
-      const workerCount = Math.min(this.getDeleteFileConcurrencyLimit(), queue.length);
+      const workerCount = Math.min(ConfigService.getConcurrencyLimit('ftpDeleteFileConcurrency', 4), queue.length);
       LoggerService.log(`[FTP][DELETE DIR][FILE QUEUE] ${targetPath} -> ${queue.length} files, workers=${workerCount}`);
 
       const workers: FtpClient[] = await Promise.all(

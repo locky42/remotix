@@ -9,6 +9,7 @@
   "command.editFile": "Редагувати файл",
   "command.upload": "Вивантажити",
   "command.download": "Завантажити",
+  "command.downloadFolderArchive": "Завантажити як архів",
   "command.rename": "Перейменувати",
   "command.changePermissions": "Змінити права",
   "command.showProperties": "Інфо",

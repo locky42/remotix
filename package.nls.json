@@ -9,6 +9,7 @@
   "command.editFile": "Edit File",
   "command.upload": "Upload",
   "command.download": "Download",
+  "command.downloadFolderArchive": "Download as Archive",
   "command.rename": "Rename",
   "command.changePermissions": "Change Permissions",
   "command.showProperties": "Info",

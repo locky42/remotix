@@ -4,8 +4,10 @@ import { PermissionChangeOptions } from '../../types';
 export interface RemoteService {
   connect(): Promise<any>;
   listDirectory?(path: string): Promise<vscode.TreeItem[]>;
+  detectModeFromEntry?(fileEntry: any): string | undefined;
 
   downloadWithDialogs?(item: any): Promise<void>;
+  downloadFolderArchiveWithDialogs?(item: any): Promise<void>;
   download(item: any, localTarget: string): Promise<void>;
   downloadDir(item: any, localTarget: string): Promise<void>;
 
