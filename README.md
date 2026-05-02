@@ -25,7 +25,7 @@ Control your infrastructure, edit files, and manage remote systems without leavi
 <details>
 <summary>Previous: v1.3.1</summary>
 
-- **📦 Download folder as archive (tar.gz) directly from the remote tree.
+- **📦 Download folder as archive (tar.gz) directly from the remote tree.**
 - **🚨 Connection Error Notifications**: SSH/FTP connection failures now show descriptive error messages.
 
 </details>
