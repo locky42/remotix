@@ -403,13 +403,30 @@ export function registerConnectionCommands(saveConnection: Function) {
       async (message) => {
         if (message.command === 'add') {
           const oldLabel = connection.label;
-          Object.assign(connection, message.data);
-          const newLabel = `${connection.type.toUpperCase()}: ${connection.label}`;
+          const formData = (message?.data || {}) as any;
+          const updatedConnection: any = {
+            ...connection,
+            ...formData
+          };
+
+          const baseLabel = String(updatedConnection.label || '')
+            .replace(/^(SSH|FTP):\s+/i, '')
+            .trim();
+          const normalizedType = String(updatedConnection.type || connection.type || 'ssh').toLowerCase() === 'ftp' ? 'ftp' : 'ssh';
+          const parsedPort = Number.parseInt(String(updatedConnection.port ?? ''), 10);
+          updatedConnection.type = normalizedType;
+          updatedConnection.port = Number.isFinite(parsedPort) && parsedPort > 0
+            ? parsedPort
+            : (normalizedType === 'ftp' ? 21 : 22);
+
+          const newLabel = `${normalizedType.toUpperCase()}: ${baseLabel}`;
+          updatedConnection.label = newLabel;
+          updatedConnection.detail = `${updatedConnection.user || ''}@${updatedConnection.host || ''}:${updatedConnection.port}`;
 
           // Store password in SecretStorage if a new password is provided.
-          if (connection.password) {
-            await ConfigService.storePassword(newLabel, connection.password);
-            delete connection.password;
+          if (updatedConnection.password) {
+            await ConfigService.storePassword(newLabel, updatedConnection.password);
+            delete updatedConnection.password;
             if (oldLabel !== newLabel) {
               await ConfigService.deletePassword(oldLabel);
             }
@@ -418,8 +435,27 @@ export function registerConnectionCommands(saveConnection: Function) {
             await ConfigService.movePassword(oldLabel, newLabel);
           }
 
-          connection.label = newLabel;
-          connection.detail = `${connection.user}@${connection.host}:${connection.port}`;
+          const globalConfig = ConfigService.getGlobalConfig();
+          const globalIndex = globalConfig.connections.findIndex((c: any) => c.label === oldLabel);
+          if (globalIndex !== -1) {
+            globalConfig.connections[globalIndex] = updatedConnection;
+            ConfigService.saveGlobalConfig(globalConfig);
+          }
+
+          const projectConfig = ConfigService.getProjectConfig();
+          const projectIndex = projectConfig.connections.findIndex((c: any) => c.label === oldLabel);
+          if (projectIndex !== -1) {
+            projectConfig.connections[projectIndex] = updatedConnection;
+            ConfigService.saveProjectConfig(projectConfig);
+          }
+
+          if (globalIndex === -1 && projectIndex === -1) {
+            globalConfig.connections.push(updatedConnection);
+            ConfigService.saveGlobalConfig(globalConfig);
+          }
+
+          Object.assign(connection, updatedConnection);
+          connectionManager.load();
           treeDataProvider.refresh();
           panel.dispose();
         } else if (message.command === 'cancel') {
