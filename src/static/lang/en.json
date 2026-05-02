@@ -52,6 +52,8 @@
   "archiveDownloadPreparing": "Creating archive on remote server",
   "archiveDownloadTransfer": "Downloading archive",
   "archiveDownloadSuccess": "Archive downloaded: {path}",
+  "archiveDownloadWarningChangedFiles": "Archive downloaded, but some files changed while being read and may be inconsistent.",
+  "showInFolder": "Show in Folder",
   "archiveDownloadError": "Failed to download archive: {error}",
   "downloadSuccess": "Download completed successfully!",
   "uploadSuccess": "Upload completed successfully!",

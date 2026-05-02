@@ -52,6 +52,8 @@
   "archiveDownloadPreparing": "Створення архіву на віддаленому сервері",
   "archiveDownloadTransfer": "Завантаження архіву",
   "archiveDownloadSuccess": "Архів завантажено: {path}",
+  "archiveDownloadWarningChangedFiles": "Архів завантажено, але деякі файли змінювалися під час читання й можуть бути неконсистентними.",
+  "showInFolder": "Показати в провіднику",
   "archiveDownloadError": "Не вдалося завантажити архів: {error}",
   "downloadSuccess": "Завантаження завершено успішно!",
   "uploadSuccess": "Завантаження завершено успішно!",

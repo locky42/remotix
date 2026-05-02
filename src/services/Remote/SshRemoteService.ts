@@ -465,6 +465,12 @@ export class SshRemoteService implements RemoteService {
 
     const parentRemotePath = RemotePathHelper.getParentRemotePath(remoteDir);
     const streamArchiveCommand = `tar -C ${this.quoteForShell(parentRemotePath)} -czf - ${this.quoteForShell(folderName)}`;
+    const isIgnorableTarWarning = (message: string): boolean => {
+      const normalized = message.toLowerCase();
+      return normalized.includes('file changed as we read it');
+    };
+    let archiveDownloadedWithWarnings = false;
+    let archiveWarningText = '';
 
     LoggerService.log(`[SSH][ARCHIVE DOWNLOAD] START dir=${remoteDir} local=${localDest}`);
 
@@ -489,28 +495,75 @@ export class SshRemoteService implements RemoteService {
               }
 
               const writeStream = fsMod.createWriteStream(localDest);
+              const stderrChunks: string[] = [];
+              let streamClosed = false;
+              let writeClosed = false;
+              let settled = false;
+
+              const finishSuccess = () => {
+                if (settled || !streamClosed || !writeClosed) {
+                  return;
+                }
+                settled = true;
+                resolve();
+              };
+
+              const finishError = (error: Error) => {
+                if (settled) {
+                  return;
+                }
+                settled = true;
+                try {
+                  writeStream.destroy();
+                } catch {
+                  // noop
+                }
+                try {
+                  fsMod.rmSync(localDest, { force: true });
+                } catch {
+                  // noop
+                }
+                reject(error);
+              };
 
               stream.on('error', (streamErr: Error) => {
-                writeStream.destroy();
-                reject(streamErr);
+                finishError(streamErr);
               });
 
               writeStream.on('error', (writeErr: Error) => {
                 stream.destroy();
-                reject(writeErr);
+                finishError(writeErr);
               });
 
-              writeStream.on('close', () => resolve());
+              writeStream.on('close', () => {
+                writeClosed = true;
+                finishSuccess();
+              });
 
               stream.stderr.on('data', (data: Buffer) => {
-                LoggerService.log(`[SSH][ARCHIVE DOWNLOAD] stderr: ${data.toString()}`);
+                const message = data.toString();
+                stderrChunks.push(message);
+                LoggerService.log(`[SSH][ARCHIVE DOWNLOAD] stderr: ${message}`);
               });
 
               stream.on('close', (code: number) => {
+                streamClosed = true;
                 writeStream.end();
-                if (code !== 0) {
-                  reject(new Error(`tar exited with code ${code}`));
+                const stderrText = stderrChunks.join('');
+                if (code === 0) {
+                  finishSuccess();
+                  return;
                 }
+
+                if (code === 1 && stderrText && isIgnorableTarWarning(stderrText)) {
+                  LoggerService.log('[SSH][ARCHIVE DOWNLOAD] tar exited with warning only; treating as success');
+                  archiveDownloadedWithWarnings = true;
+                  archiveWarningText = stderrText.trim();
+                  finishSuccess();
+                  return;
+                }
+
+                finishError(new Error(stderrText.trim() || `tar exited with code ${code}`));
               });
 
               stream.pipe(writeStream);
@@ -519,7 +572,16 @@ export class SshRemoteService implements RemoteService {
         }
       );
 
-      vscode.window.showInformationMessage(LangService.t('archiveDownloadSuccess', { path: localDest }));
+      const showAction = LangService.t('showInFolder');
+      vscode.window.showInformationMessage(LangService.t('archiveDownloadSuccess', { path: localDest }), showAction).then(action => {
+        if (action === showAction) {
+          vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(localDest));
+        }
+      });
+      if (archiveDownloadedWithWarnings) {
+        LoggerService.log(`[SSH][ARCHIVE DOWNLOAD] END success with warnings dir=${remoteDir} warning=${archiveWarningText}`);
+        vscode.window.showWarningMessage(LangService.t('archiveDownloadWarningChangedFiles'));
+      }
       LoggerService.log(`[SSH][ARCHIVE DOWNLOAD] END success dir=${remoteDir} local=${localDest}`);
     } catch (error: any) {
       LoggerService.log(`[SSH][ARCHIVE DOWNLOAD] END fail dir=${remoteDir} error=${error instanceof Error ? error.message : String(error)}`);
