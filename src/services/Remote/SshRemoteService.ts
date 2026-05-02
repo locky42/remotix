@@ -463,9 +463,8 @@ export class SshRemoteService implements RemoteService {
     const archiveName = archiveNameInput.trim();
     const localDest = pathMod.join(uri[0].fsPath, archiveName);
 
-    const remoteTmpArchivePath = `/tmp/remotix-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tar.gz`;
     const parentRemotePath = RemotePathHelper.getParentRemotePath(remoteDir);
-    const createArchiveCommand = `tar -C ${this.quoteForShell(parentRemotePath)} -czf ${this.quoteForShell(remoteTmpArchivePath)} ${this.quoteForShell(folderName)}`;
+    const streamArchiveCommand = `tar -C ${this.quoteForShell(parentRemotePath)} -czf - ${this.quoteForShell(folderName)}`;
 
     LoggerService.log(`[SSH][ARCHIVE DOWNLOAD] START dir=${remoteDir} local=${localDest}`);
 
@@ -477,9 +476,6 @@ export class SshRemoteService implements RemoteService {
           cancellable: false,
         },
         async (progress) => {
-          progress.report({ message: LangService.t('archiveDownloadPreparing') });
-          await this.runShellCommand(createArchiveCommand, 300000);
-
           progress.report({ message: LangService.t('archiveDownloadTransfer') });
           const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
           if (!session) {
@@ -487,30 +483,37 @@ export class SshRemoteService implements RemoteService {
           }
 
           await new Promise<void>((resolve, reject) => {
-            session.sftp((err, sftp) => {
+            session.exec(streamArchiveCommand, (err, stream) => {
               if (err) {
                 return reject(err);
               }
 
               const writeStream = fsMod.createWriteStream(localDest);
-              const readStream = sftp.createReadStream(remoteTmpArchivePath);
 
-              const finalizeError = (error: Error): void => {
-                readStream.destroy();
+              stream.on('error', (streamErr: Error) => {
                 writeStream.destroy();
-                sftp.end();
-                reject(error);
-              };
-
-              readStream.on('error', (streamErr: Error) => finalizeError(streamErr));
-              writeStream.on('error', (streamErr: Error) => finalizeError(streamErr));
-
-              writeStream.on('close', () => {
-                sftp.end();
-                resolve();
+                reject(streamErr);
               });
 
-              readStream.pipe(writeStream);
+              writeStream.on('error', (writeErr: Error) => {
+                stream.destroy();
+                reject(writeErr);
+              });
+
+              writeStream.on('close', () => resolve());
+
+              stream.stderr.on('data', (data: Buffer) => {
+                LoggerService.log(`[SSH][ARCHIVE DOWNLOAD] stderr: ${data.toString()}`);
+              });
+
+              stream.on('close', (code: number) => {
+                writeStream.end();
+                if (code !== 0) {
+                  reject(new Error(`tar exited with code ${code}`));
+                }
+              });
+
+              stream.pipe(writeStream);
             });
           });
         }
@@ -523,12 +526,6 @@ export class SshRemoteService implements RemoteService {
       vscode.window.showErrorMessage(LangService.t('archiveDownloadError', {
         error: error instanceof Error ? error.message : String(error)
       }));
-    } finally {
-      try {
-        await this.runShellCommand(`rm -f ${this.quoteForShell(remoteTmpArchivePath)}`, 30000);
-      } catch (cleanupError: any) {
-        LoggerService.log(`[SSH][ARCHIVE DOWNLOAD] cleanup warning path=${remoteTmpArchivePath} error=${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
-      }
     }
   }
 
