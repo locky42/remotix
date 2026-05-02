@@ -2,11 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.2] - 2026-05-02
+
+### Added
+
+- File and folder labels in the remote tree now show last modified date.
+- File labels in the remote tree now show human-readable sizes (`KB`, `MB`, `GB`).
+
+### Changed
+
+- Archive download for SSH folders now streams `tar.gz` content directly from the remote server.
+
+### Fixed
+
+- Edited connections are now persisted correctly after saving.
+- SSH archive downloads no longer fail on non-fatal tar warnings such as "file changed as we read it".
+
 ## [1.3.1] - 2026-05-02
 
 ### Added
 
-- Download folder as archive (zip) directly from the remote tree.
+- Download folder as archive (tar.gz) directly from the remote tree.
 - Error notifications for failed SSH/FTP connections with descriptive messages.
 
 ### Changed

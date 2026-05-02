@@ -15,10 +15,20 @@ Control your infrastructure, edit files, and manage remote systems without leavi
 
 ---
 
-## 🔥 What's New in v1.3.1
+## 🔥 What's New in v1.3.2
 
-- **📦 Download as Archive**: Download remote folders and files as a zip archive in one click.
+- **📦 Streamed Archive Download**: Download SSH folders as a `tar.gz` archive streamed directly from the remote server.
+- **🕒 Rich Tree Labels**: Remote tree items now show last modified date, and files also display human-readable sizes.
+- **💾 Reliable Connection Editing**: Changes made in the connection editor are now saved correctly.
+- **🚨 Smarter Archive Handling**: Non-fatal tar warnings no longer abort archive downloads.
+
+<details>
+<summary>Previous: v1.3.1</summary>
+
+- **📦 Download folder as archive (tar.gz) directly from the remote tree.
 - **🚨 Connection Error Notifications**: SSH/FTP connection failures now show descriptive error messages.
+
+</details>
 
 <details>
 <summary>Previous: v1.3.0</summary>
@@ -66,7 +76,9 @@ Only the extension itself can securely retrieve these secrets when establishing 
 - **✏️ Live Editing** — Edit remote files with instant synchronization on save.
 - **🖥️ Integrated Terminal** — Quick access to SSH terminal sessions directly from the sidebar.
 - **🔐 Permission Control** — Manage `chmod` and view file metadata/properties in a clean dialog.
+- **🕒 Rich Labels** — See human-readable file sizes and last modified timestamps directly in the remote tree.
 - **📥 One-Click Import** — Seamlessly migrate hosts from `~/.ssh/config` and FileZilla.
+- **📦 Archive Export** — Download SSH folders as streamed `tar.gz` archives without temporary remote files.
 - **🌍 Multi-language** — Full native support for English and Ukrainian.
 
 ---
