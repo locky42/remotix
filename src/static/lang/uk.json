@@ -165,5 +165,20 @@
   "copyFailed": "Не вдалося скопіювати: {error}",
   "copiedPathToClipboard": "Шлях скопійовано в буфер обміну",
   "openFile": "Відкрити файл",
-  "select": "Вибрати"
+  "select": "Вибрати",
+  "passwordNotSetForConnection": "Пароль не задано для підключення: {label}",
+  "sshKeyFilePathNotConfigured": "Шлях до SSH-ключа не налаштовано для підключення: {label}",
+  "sshKeyFileNotFound": "Файл SSH-ключа не знайдено: {path}",
+  "failedToInitiateConnection": "Не вдалося ініціювати підключення: {error}",
+  "directoryReadError": "Помилка читання директорії {path}: {error}",
+  "connectionErrorWithLabel": "{label}: {error}",
+  "ftpSessionNotInitializedForConnection": "FTP-сесію не ініціалізовано або з'єднання закрито для {label}",
+  "ftpClientNotInitializedOrClosed": "FTP-клієнт не ініціалізовано або з'єднання закрито",
+  "ftpErrorMessage": "Помилка FTP: {error}",
+  "remotePathMissing": "Відсутній віддалений шлях",
+  "ftpSessionNotInitializedOrClosed": "FTP-сесію не ініціалізовано або з'єднання закрито",
+  "ftpSessionNotInitialized": "FTP-сесію не ініціалізовано",
+  "downloadProgressStatus": "Remotix: Завантажено {downloaded}/{total} елементів",
+  "moveFailed": "Не вдалося перемістити: {error}",
+  "itemsMovedSuccessfully": "Елементи успішно переміщено"
 }

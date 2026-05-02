@@ -64,7 +64,7 @@ export class FtpRemoteService implements RemoteService {
     try {
       const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
       if (!session || (session as any).closed) {
-        throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
+        throw new Error(LangService.t('ftpSessionNotInitializedForConnection', { label: this.connection.label }));
       }
 
       let entry: any | undefined;
@@ -263,7 +263,7 @@ export class FtpRemoteService implements RemoteService {
     await this._mutex.acquire(async () => {
       const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
       if (!session || (session as any).closed) {
-        throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
+        throw new Error(LangService.t('ftpSessionNotInitializedForConnection', { label: this.connection.label }));
       }
 
       const absolutePath = RemotePathHelper.toAbsoluteRemotePath(remotePath, this.initialPath);
@@ -371,7 +371,7 @@ export class FtpRemoteService implements RemoteService {
         const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
 
         if (!session || (session as any).closed) {
-          throw new Error('FTP client not initialized or connection closed');
+          throw new Error(LangService.t('ftpClientNotInitializedOrClosed'));
         }
 
         if (path === '.') {
@@ -463,7 +463,7 @@ export class FtpRemoteService implements RemoteService {
       } catch (e: any) {
         const msg = e.message || String(e);
         LoggerService.log(`[FTP][ERROR] Exception in listDirectory: ${msg}`);
-        vscode.window.showErrorMessage('FTP Error: ' + msg);
+        vscode.window.showErrorMessage(LangService.t('ftpErrorMessage', { error: msg }));
         return [];
       }
     });
@@ -499,7 +499,7 @@ export class FtpRemoteService implements RemoteService {
   async download(item: any, localTarget: string): Promise<void> {
     const remotePath = item?.ftpPath;
     if (!remotePath) {
-      throw new Error('Remote path is missing');
+      throw new Error(LangService.t('remotePathMissing'));
     }
 
     const pathMod = require('path');
@@ -508,7 +508,7 @@ export class FtpRemoteService implements RemoteService {
     const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
     
     if (!session || (session as any).closed) {
-      throw new Error('FTP session not initialized or connection closed');
+      throw new Error(LangService.t('ftpSessionNotInitializedOrClosed'));
     }
 
     LoggerService.log(`[FTP][DOWNLOAD FILE] START: ${remotePath} -> ${localDest}`);
@@ -532,7 +532,7 @@ export class FtpRemoteService implements RemoteService {
       await fs.promises.mkdir(localDest, { recursive: true });
 
       const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
-      if (!session || (session as any).closed) throw new Error('FTP session not initialized');
+      if (!session || (session as any).closed) throw new Error(LangService.t('ftpSessionNotInitialized'));
 
       LoggerService.log(`[FTP][DOWNLOAD DIR] START: ${remoteDir} -> ${localDest}`);
       try {
@@ -577,7 +577,10 @@ export class FtpRemoteService implements RemoteService {
               await worker.downloadTo(job.localPath, job.remotePath);
               downloadedCount++;
               LoggerService.log(`[FTP][DOWNLOAD DIR][FILE] END: ${job.remotePath}`);
-              vscode.window.setStatusBarMessage(`Remotix: Downloaded ${downloadedCount}/${filesToDownload.length} items`, 2000);
+              vscode.window.setStatusBarMessage(
+                LangService.t('downloadProgressStatus', { downloaded: downloadedCount, total: filesToDownload.length }),
+                2000
+              );
             }
           };
 
@@ -619,8 +622,8 @@ export class FtpRemoteService implements RemoteService {
     const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
     const uploadType = await vscode.window.showQuickPick(
         [
-            { label: '$(file) File', value: 'file' },
-            { label: '$(folder) Folder', value: 'folder' }
+        { label: `$(file) ${LangService.t('file')}`, value: 'file' },
+        { label: `$(folder) ${LangService.t('folder')}`, value: 'folder' }
         ], 
         { placeHolder: LangService.t('selectUploadType') }
     );
@@ -684,7 +687,7 @@ export class FtpRemoteService implements RemoteService {
       const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
       
       if (!session || (session as any).closed) {
-        throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
+        throw new Error(LangService.t('ftpSessionNotInitializedForConnection', { label: this.connection.label }));
       }
 
       LoggerService.log(`[FTP][UPLOAD FILE] START: ${localPath} -> ${remotePath}`);
@@ -704,7 +707,7 @@ export class FtpRemoteService implements RemoteService {
       const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
       
       if (!session || (session as any).closed) {
-        throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
+        throw new Error(LangService.t('ftpSessionNotInitializedForConnection', { label: this.connection.label }));
       }
 
       LoggerService.log(`[FTP][UPLOAD DIR] START: ${localDir} -> ${remoteDir}`);
@@ -1345,7 +1348,7 @@ export class FtpRemoteService implements RemoteService {
         } catch (err: any) {
           hadError = true;
           LoggerService.log(`[FTP][moveItems][ERROR] ${err.message}`);
-          vscode.window.showErrorMessage(`Move failed: ${err.message}`);
+          vscode.window.showErrorMessage(LangService.t('moveFailed', { error: err.message }));
         }
       }
 
@@ -1354,7 +1357,7 @@ export class FtpRemoteService implements RemoteService {
       }
       
       if (!hadError) {
-        vscode.window.showInformationMessage('Items moved successfully');
+        vscode.window.showInformationMessage(LangService.t('itemsMovedSuccessfully'));
       }
     });
   }

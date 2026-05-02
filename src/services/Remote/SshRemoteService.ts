@@ -232,6 +232,18 @@ export class SshRemoteService implements RemoteService {
       this.connection.password = await ConfigService.getPassword(this.connection.label);
     }
 
+    if (this.connection.authMethod === 'password' && !this.connection.password) {
+      throw new Error(LangService.t('passwordNotSetForConnection', { label: this.connection.label }));
+    }
+
+    if (this.connection.authMethod === 'privateKey' && !this.connection.authFile) {
+      throw new Error(LangService.t('sshKeyFilePathNotConfigured', { label: this.connection.label }));
+    }
+
+    if (this.connection.authMethod === 'privateKey' && this.connection.authFile && !fs.existsSync(this.connection.authFile)) {
+      throw new Error(LangService.t('sshKeyFileNotFound', { path: this.connection.authFile }));
+    }
+
     return new Promise((resolve, reject) => {
       const sshClient = new SshClient();
       LoggerService.log('[SshRemoteService] Establishing SSH connection with a fresh client instance...');
@@ -261,7 +273,7 @@ export class SshRemoteService implements RemoteService {
           privateKey: this.connection.authMethod === 'privateKey' && this.connection.authFile ? fs.readFileSync(this.connection.authFile) : undefined,
         });
       } catch (e: any) {
-        reject(new Error(`Failed to initiate connection: ${e.message}`));
+        reject(new Error(LangService.t('failedToInitiateConnection', { error: e.message })));
       }
     });
   }
@@ -301,7 +313,7 @@ export class SshRemoteService implements RemoteService {
                         }
                     }
 
-                    vscode.window.showErrorMessage(`Помилка читання директорії ${path}: ${err.message}`);
+                    vscode.window.showErrorMessage(LangService.t('directoryReadError', { path, error: err.message }));
                     return resolve([]);
                   }
 
@@ -363,6 +375,7 @@ export class SshRemoteService implements RemoteService {
       } catch (err: any) {
           LoggerService.log(`[SshRemoteService] SSH error: ${err.message}`);
           this.sftpClient = null;
+          vscode.window.showErrorMessage(LangService.t('connectionErrorWithLabel', { label: this.connection.label, error: err.message }));
           return [];
       }
   }

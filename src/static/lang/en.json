@@ -165,5 +165,20 @@
   "copyFailed": "Copy failed: {error}",
   "copiedPathToClipboard": "Path copied to clipboard",
   "openFile": "Open file",
-  "select": "Select"
+  "select": "Select",
+  "passwordNotSetForConnection": "Password is not set for connection: {label}",
+  "sshKeyFilePathNotConfigured": "SSH key file path is not configured for connection: {label}",
+  "sshKeyFileNotFound": "SSH key file not found: {path}",
+  "failedToInitiateConnection": "Failed to initiate connection: {error}",
+  "directoryReadError": "Directory read error {path}: {error}",
+  "connectionErrorWithLabel": "{label}: {error}",
+  "ftpSessionNotInitializedForConnection": "FTP session not initialized or connection closed for {label}",
+  "ftpClientNotInitializedOrClosed": "FTP client not initialized or connection closed",
+  "ftpErrorMessage": "FTP error: {error}",
+  "remotePathMissing": "Remote path is missing",
+  "ftpSessionNotInitializedOrClosed": "FTP session not initialized or connection closed",
+  "ftpSessionNotInitialized": "FTP session not initialized",
+  "downloadProgressStatus": "Remotix: Downloaded {downloaded}/{total} items",
+  "moveFailed": "Move failed: {error}",
+  "itemsMovedSuccessfully": "Items moved successfully"
 }
