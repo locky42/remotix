@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2026-05-02
+
+### Added
+
+- Download folder as archive (zip) directly from the remote tree.
+- Error notifications for failed SSH/FTP connections with descriptive messages.
+
+### Changed
+
+- Code optimizations across file operation handlers.
+
 ## [1.3.0] - 2026-04-28
 
 ### Added

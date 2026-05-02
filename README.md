@@ -15,13 +15,21 @@ Control your infrastructure, edit files, and manage remote systems without leavi
 
 ---
 
-## 🔥 What's New in v1.3.0
+## 🔥 What's New in v1.3.1
+
+- **📦 Download as Archive**: Download remote folders and files as a zip archive in one click.
+- **🚨 Connection Error Notifications**: SSH/FTP connection failures now show descriptive error messages.
+
+<details>
+<summary>Previous: v1.3.0</summary>
 
 - **🛡️ Secret Storage Migration**: Industry-standard encryption for your passwords.
 - **↕️ Manual Connection Sorting**: Reorder servers via drag-and-drop.
 - **🔐 Permission Management (chmod)**: Full control over file/folder permissions.
 - **📄 Properties Dialog**: View detailed metadata (owner, group, timestamps).
 - **🔑 Password Access**: Securely view or copy stored credentials from the UI.
+
+</details>
 
 </div>
 <div style="flex: 1; min-width: 280px; text-align: center;">
@@ -118,12 +126,12 @@ Alternatively:
   <div style="flex: 1; min-width: 300px;">
     <strong>Panel Overview</strong><br/>
     Manage multiple connections in a unified sidebar. Use the <b>Gear Icon</b> for settings or <b>Drag-and-Drop</b> to reorder.
-    <img src="media/screenshots/panel-overview.png" width="100%" style="margin-top: 10px;">
+    <img src="media/screenshots/panel-overview.png" width="350px" style="margin-top: 10px;">
   </div>
   <div style="flex: 1; min-width: 300px;">
     <strong>File Operations</strong><br/>
     Manage your remote file system with a native-feel context menu. Change <b>Permissions (chmod)</b> or view metadata.
-    <img src="media/screenshots/context-menu.png" width="100%" style="margin-top: 10px;">
+    <img src="media/screenshots/context-menu.png" width="auto" style="margin-top: 10px;">
   </div>
 </div>
 
@@ -132,7 +140,7 @@ Alternatively:
 ### ✏️ Remote File Editing
 Open remote files directly in VS Code with syntax highlighting and instant sync on save. Treat your remote server as a local workspace.
 <p align="center">
-  <img src="media/screenshots/edit-file.png" width="100%" alt="Remote File Editing">
+  <img src="media/screenshots/edit-file.png" width="auto" alt="Remote File Editing">
 </p>
 
 ---
@@ -140,7 +148,7 @@ Open remote files directly in VS Code with syntax highlighting and instant sync 
 ### 🖥️ Integrated SSH Terminal
 Launch secure terminal sessions with one click. Execute commands and monitor your server without switching to an external terminal.
 <p align="center">
-  <img src="media/screenshots/terminal.png" width="100%" alt="SSH Terminal">
+  <img src="media/screenshots/terminal.png" width="auto" alt="SSH Terminal">
 </p>
 
 ---
@@ -148,7 +156,7 @@ Launch secure terminal sessions with one click. Execute commands and monitor you
 ### 📄 Detailed Metadata
 The **Properties Dialog** gives you full visibility into remote file attributes, including ownership, exact timestamps, and UID/GID.
 <p align="center">
-  <img src="media/screenshots/info-dialog.png" width="100%" alt="File Info Dialog">
+  <img src="media/screenshots/info-dialog.png" width="auto" alt="File Info Dialog">
 </p>
 
 ---
@@ -156,7 +164,7 @@ The **Properties Dialog** gives you full visibility into remote file attributes,
 ### ⚙️ Deep Customization
 Fine-tune your experience via VS Code settings. Adjust concurrency for faster transfers or change UI language.
 <p align="center">
-  <img src="media/screenshots/settings.png" width="100%" alt="Extension Settings">
+  <img src="media/screenshots/settings.png" width="auto" alt="Extension Settings">
 </p>
 
 ---
