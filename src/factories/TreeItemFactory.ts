@@ -20,17 +20,11 @@ export class TreeItemFactory {
       connection.label,
       hasActiveSession ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed
     );
-    let desc = '';
-    if (connection.type === 'ssh') {
-      desc = `${connection.user || ''}@${connection.host || ''}:${connection.port || ''}`;
-    } else {
-      desc = `${connection.user || ''}@${connection.host || ''}:${connection.port || ''}`;
-    }
+
+    let desc = `${connection.user || ''}@${connection.host || ''}:${connection.port || ''}`;
     item.description = `${connection.type.toUpperCase()} • ${desc}`;
     item.tooltip = connection.label;
-    item.iconPath = connection.type === 'ssh' 
-      ? new vscode.ThemeIcon('terminal')
-      : new vscode.ThemeIcon('cloud');
+    item.iconPath = connection.type === 'ssh' ? new vscode.ThemeIcon('terminal') : new vscode.ThemeIcon('cloud');
     (item as any).contextValue = hasActiveSession ? 'connection-active' : 'connection';
     if (connection.type === 'ssh') {
       (item as any).sshPath = '.';
@@ -38,6 +32,15 @@ export class TreeItemFactory {
       (item as any).ftpPath = '.';
     }
     (item as any).connectionLabel = connection.label;
+
+    if (!hasActiveSession) {
+      item.command = {
+        command: 'remotix.expandConnectionOnDoubleClick',
+        title: 'Connect on Double Click',
+        arguments: [item]
+      };
+    }
+
     return item;
   }
 

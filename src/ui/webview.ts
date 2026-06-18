@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ConnectionItem } from '../types';
-import { LangService } from '../services/LangService';
 import { ViewHelper } from '../helpers/ViewHelper';
+import { LangService } from '../services/LangService';
 import { ConfigService } from '../services/ConfigService';
 import { LoggerService } from '../services/LoggerService';
 

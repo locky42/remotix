@@ -17,8 +17,4 @@ export class LoggerService {
   static logObject(label: string, obj: any) {
     LoggerService.getChannel().appendLine(`${label}: ${JSON.stringify(obj, null, 2)}`);
   }
-
-  static show() {
-    LoggerService.getChannel().show(true);
-  }
 }

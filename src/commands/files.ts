@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
-import { ConnectionItem, RemoteClipboard } from '../types';
 import { Container } from '../services/Container';
 import { LangService } from '../services/LangService';
+import { ConnectionItem, RemoteClipboard } from '../types';
+import { RemotePathHelper } from '../helpers/RemotePathHelper';
 import { RemoteService } from '../services/Remote/RemoteService';
 import { ConnectionManager } from '../services/ConnectionManager';
-import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
-import { RemotePathHelper } from '../helpers/RemotePathHelper';
 import { RemoteClipboardHelper } from '../helpers/RemoteClipboardHelper';
+import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
 
 let remoteClipboard: RemoteClipboard | undefined;
 

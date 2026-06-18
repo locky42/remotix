@@ -55,6 +55,10 @@
   "contributes": {
     "commands": [
       {
+        "command": "remotix.expandConnectionOnDoubleClick",
+        "title": "Expand Connection"
+      },
+      {
         "command": "remotix.addConnection",
         "title": "%command.addConnection%",
         "icon": "$(add)"

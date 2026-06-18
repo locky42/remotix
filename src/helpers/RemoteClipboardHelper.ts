@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { RemotePathHelper } from './RemotePathHelper';
 import { RemoteClipboard } from '../types';
+import { RemotePathHelper } from './RemotePathHelper';
 
 export class RemoteClipboardHelper {
   private static readonly REMOTIX_CLIPBOARD_PREFIX = 'remotix-clipboard:';

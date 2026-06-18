@@ -2,11 +2,11 @@ import * as vscode from 'vscode';
 import { ConnectionItem } from '../types';
 import { TreeViewLocker } from './TreeViewLocker';
 import { Container } from '../services/Container';
+import { SessionProvider } from '../services/SessionProvider';
 import { TreeItemFactory } from '../factories/TreeItemFactory';
 import { DragAndDropController } from './DragAndDropController';
 import { ConnectionManager } from '../services/ConnectionManager';
 import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
-import { SessionProvider } from '../services/SessionProvider';
 
 export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.TreeDragAndDropController<vscode.TreeItem> {
   private remoteServiceCache: Record<string, any> = {};
@@ -184,7 +184,6 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
     const { LoggerService } = await import('../services/LoggerService');
     const elementAny = element as any;
     const elementPath = elementAny?.sshPath || elementAny?.ftpPath || '.';
-    LoggerService.show();
     LoggerService.log('------------------------------');
     LoggerService.log('[TreeDataProvider][DEBUG] getChildren ENTRY');
     LoggerService.log(`[TreeDataProvider][DEBUG] element: ${element ? `label=${String(elementAny?.label || '')}, context=${String(elementAny?.contextValue || '')}, path=${String(elementPath)}` : 'undefined'}`);
@@ -202,7 +201,6 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
       const addItem = this.itemFactory.createAddConnectionItem();
       let connections = this.connectionManager.getAll();
       
-      // Apply preview order if active
       if (this.previewConnectionOrder) {
         const connMap = new Map(connections.map(c => [c.label, c]));
         const previewConns: ConnectionItem[] = [];
@@ -228,15 +226,22 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
       return [addItem, ...connectionItems];
     }
     if (element && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active' || (element as any).contextValue === 'ssh-folder' || (element as any).contextValue === 'ftp-folder')) {
+      const label = (element as any).connectionLabel || element.label;
+      const hasSession = SessionProvider.hasSession(String(label));
+      const isExpandingNow = (this as any).allowExpandOnce === label;
+
+      if (!hasSession && !isExpandingNow && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active')) {
+        LoggerService.log('[TreeDataProvider][DEBUG] Single click connection expand suppressed');
+        return [];
+      }
+
       if (this.suppressConnectionExpand && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active')) {
         LoggerService.log('[TreeDataProvider][DEBUG] Connection expand suppressed during reorder drag');
         return [];
       }
 
-      const label = (element as any).connectionLabel || element.label;
       LoggerService.log(`[TreeDataProvider][DEBUG] label: ${label}`);
       
-      // Don't connect during reorder - applies to all elements
       if (this.isReordering) {
         LoggerService.log(`[TreeDataProvider][DEBUG] Skipping connection during reorder for ${label}`);
         return [];
@@ -298,6 +303,36 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
     LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (default)');
     LoggerService.log('------------------------------');
     return [];
+  }
+
+  getParent(element: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem> {
+    if (element.contextValue === 'connection' || element.contextValue === 'connection-active') {
+      return undefined;
+    }
+
+    const elementAny = element as any;
+    const connectionLabel = elementAny.connectionLabel;
+    const currentPath = elementAny.sshPath || elementAny.ftpPath;
+    
+    if (!connectionLabel || !currentPath || currentPath === '.') {
+      return undefined;
+    }
+
+    const pathParts = currentPath.split('/');
+    pathParts.pop();
+    
+    let parentPath = pathParts.join('/') || '.';
+    
+    const isSsh = elementAny.contextValue?.startsWith('ssh-');
+    const parentContext = isSsh ? 'ssh-folder' : 'ftp-folder';
+
+    if (parentPath === '.') {
+      const serverKey = this.buildElementKey(connectionLabel, 'connection', '.');
+      return this.elementIndex.get(serverKey);
+    }
+
+    const parentKey = this.buildElementKey(connectionLabel, parentContext, parentPath);
+    return this.elementIndex.get(parentKey);
   }
 
   addConnection(conn: ConnectionItem) {

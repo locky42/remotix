@@ -68,10 +68,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const connectionManager = new ConnectionManager();
   Container.set('connectionManager', connectionManager);
-  const remoteServiceProvider = new RemoteServiceProvider();
-  Container.set('remoteServiceProvider', remoteServiceProvider);
-  const remoteFileEditService = new RemoteFileEditService();
-  Container.set('remoteFileEditService', remoteFileEditService);
+  Container.set('remoteServiceProvider', new RemoteServiceProvider());
+  Container.set('remoteFileEditService', new RemoteFileEditService());
   const treeDataProvider = new TreeDataProvider();
   // Patch: load passwords from SecretStorage for all connections
   const patchConnectionsWithPasswords = async () => {
@@ -90,6 +88,8 @@ export async function activate(context: vscode.ExtensionContext) {
     dragAndDropController: treeDataProvider
   });
   context.subscriptions.push(treeView);
+
+  Container.set('treeView', treeView);
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
     if (event.affectsConfiguration('remotix.language')) {

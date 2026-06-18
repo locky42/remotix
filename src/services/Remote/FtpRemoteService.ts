@@ -29,7 +29,6 @@ export class FtpRemoteService implements RemoteService {
 
   constructor(connection: ConnectionItem) {
     this.connection = connection;
-    LoggerService.show();
     LoggerService.log('[FTP] FtpRemoteService instance created.');
   }
 

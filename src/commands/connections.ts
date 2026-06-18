@@ -6,8 +6,8 @@ import { getAddConnectionHtml } from '../ui/webview';
 import { LangService } from '../services/LangService';
 import { ConfigService } from '../services/ConfigService';
 import { TreeDataProvider } from '../ui/TreeDataProvider';
-import { ConnectionManager } from '../services/ConnectionManager';
 import { SessionProvider } from '../services/SessionProvider';
+import { ConnectionManager } from '../services/ConnectionManager';
 import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
 
 function normalizePortByType(rawPort: any, type: 'ftp' | 'ssh'): number {

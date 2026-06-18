@@ -21,7 +21,6 @@ export function createRemoteService(connection: ConnectionItem): RemoteService {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
     }
     LoggerService.log(`[createRemoteService] Connection not found: ${connection.label}`);
-    LoggerService.show();
     throw new Error(LangService.t('connectionNotFound'));
   }
 
