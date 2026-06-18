@@ -115,11 +115,13 @@ export async function activate(context: vscode.ExtensionContext) {
     if (connection.authMethod === 'password') {
       password = await ConfigService.getPassword(connection.label);
     }
+    password = password?.replace(/'/g, "'\\''") || '';
     let sshCmd = `ssh${connection.port ? ' -p ' + connection.port : ''}`;
     if (connection.authMethod === 'privateKey' && connection.authFile) {
       sshCmd += ` -i "${connection.authFile}"`;
     }
     sshCmd += ` ${connection.user}@${connection.host}`;
+    let terminal = vscode.window.createTerminal({name: connection.label});
     if (connection.authMethod === 'password' && password) {
       const { execSync } = require('child_process');
       let sshpassExists = false;
@@ -130,12 +132,16 @@ export async function activate(context: vscode.ExtensionContext) {
         sshpassExists = false;
       }
       if (sshpassExists) {
-        sshCmd = `sshpass -p '${password.replace(/'/g, "'\\''")}' ` + sshCmd;
+        terminal = vscode.window.createTerminal({
+          name: connection.label,
+          env: { 'SSHPASS': password }
+        });
+        sshCmd = `sshpass -e ` + sshCmd + '; unset SSHPASS';
       } else {
         vscode.window.showInformationMessage(LangService.t('sshpassNotFound'));
       }
     }
-    const terminal = vscode.window.createTerminal({ name: connection.label });
+    
     terminal.sendText(sshCmd);
     terminal.show();
   }));
