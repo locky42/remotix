@@ -182,5 +182,6 @@
   "ftpSessionNotInitialized": "FTP session not initialized",
   "downloadProgressStatus": "Remotix: Downloaded {downloaded}/{total} items",
   "moveFailed": "Move failed: {error}",
-  "itemsMovedSuccessfully": "Items moved successfully"
+  "itemsMovedSuccessfully": "Items moved successfully",
+  "sshpassNotFound": "sshpass not found."
 }

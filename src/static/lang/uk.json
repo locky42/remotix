@@ -182,5 +182,6 @@
   "ftpSessionNotInitialized": "FTP-сесію не ініціалізовано",
   "downloadProgressStatus": "Remotix: Завантажено {downloaded}/{total} елементів",
   "moveFailed": "Не вдалося перемістити: {error}",
-  "itemsMovedSuccessfully": "Елементи успішно переміщено"
+  "itemsMovedSuccessfully": "Елементи успішно переміщено",
+  "sshpassNotFound": "sshpass не знайдено."
 }

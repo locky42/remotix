@@ -2,41 +2,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ConnectionItem } from '../types';
 import { LangService } from '../services/LangService';
+import { ViewHelper } from '../helpers/ViewHelper';
+import { ConfigService } from '../services/ConfigService';
+import { LoggerService } from '../services/LoggerService';
 
-export function getAddConnectionHtml(init?: Partial<ConnectionItem>): string {
+export async function getAddConnectionHtml(init?: Partial<ConnectionItem>): Promise<string> {
     let htmlPath = path.join(__dirname, '../static/ui/addConnection.html');
     if (!fs.existsSync(htmlPath)) {
         htmlPath = path.join(__dirname, '../../static/ui/addConnection.html');
     }
-    let html = fs.readFileSync(htmlPath, 'utf8');
-    html = html.replace(/\{\{TITLE\}\}/g, init ? LangService.t('editConnectionTitle') : LangService.t('addConnectionTitle'));
-    html = html.replace(/\{\{SUBMIT\}\}/g, init ? LangService.t('submitSave') : LangService.t('submitAdd'));
-    html = html.replace(/\{\{GLOBAL\}\}/g, LangService.t('global'));
-    html = html.replace(/\{\{TYPE_LABEL\}\}/g, LangService.t('typeLabel'));
-    html = html.replace(/\{\{SSH\}\}/g, LangService.t('ssh'));
-    html = html.replace(/\{\{FTP\}\}/g, LangService.t('ftp'));
-    html = html.replace(/\{\{NAME\}\}/g, LangService.t('name'));
-    html = html.replace(/\{\{HOST\}\}/g, LangService.t('host'));
-    html = html.replace(/\{\{PORT\}\}/g, LangService.t('port'));
-    html = html.replace(/\{\{USER\}\}/g, LangService.t('user'));
-    html = html.replace(/\{\{AUTH_METHOD_LABEL\}\}/g, LangService.t('authMethodLabel'));
-    html = html.replace(/\{\{PASSWORD\}\}/g, LangService.t('password'));
-    html = html.replace(/\{\{SHOW_PASSWORD\}\}/g, LangService.t('showPassword'));
-    html = html.replace(/\{\{HIDE_PASSWORD\}\}/g, LangService.t('hidePassword'));
-    html = html.replace(/\{\{COPY_PASSWORD\}\}/g, LangService.t('copyPassword'));
-    html = html.replace(/\{\{SSH_KEY\}\}/g, LangService.t('sshKey'));
-    html = html.replace(/\{\{PASSWORD_SELECTED\}\}/g, init?.authMethod === 'password' ? 'selected' : '');
-    html = html.replace(/\{\{KEY_SELECTED\}\}/g, init?.authMethod === 'privateKey' ? 'selected' : '');
-    html = html.replace(/\{\{PASSWORD_VALUE\}\}/g, init?.password || '');
-    html = html.replace(/\{\{AUTH_FILE_LABEL\}\}/g, LangService.t('authFileLabel'));
-    html = html.replace(/\{\{AUTH_FILE_PLACEHOLDER\}\}/g, LangService.t('authFilePlaceholder'));
-    html = html.replace(/\{\{AUTH_FILE_VALUE\}\}/g, init?.authFile || '');
-    html = html.replace(/\{\{PICK_FILE\}\}/g, LangService.t('pickFile'));
-    html = html.replace(/\{\{CANCEL\}\}/g, LangService.t('cancel'));
-    html = html.replace(/\{\{SSH_SELECTED\}\}/g, init?.type === 'ssh' ? 'selected' : '');
-    html = html.replace(/\{\{FTP_SELECTED\}\}/g, init?.type === 'ftp' ? 'selected' : '');
-    html = html.replace(/\{\{LABEL_VALUE\}\}/g, init?.label ? (init.label.replace(/^\w+: /, '')) : '');
-    // HOST
+
     let hostValue = '';
     if (typeof init?.host === 'string') {
         hostValue = init.host;
@@ -44,16 +19,45 @@ export function getAddConnectionHtml(init?: Partial<ConnectionItem>): string {
         const parts = init.detail.split('@');
         hostValue = parts[1]?.split(':')[0] || '';
     }
-    html = html.replace(/\{\{HOST_VALUE\}\}/g, hostValue);
-    // PORT
-    html = html.replace(/\{\{PORT_VALUE\}\}/g, String(init?.port ?? '22'));
-    // USER
-    let userValue = '';
-    if (typeof init?.user === 'string') {
-        userValue = init.user;
-    } else if (typeof init?.detail === 'string') {
-        userValue = init.detail.split('@')[0] || '';
-    }
-    html = html.replace(/\{\{USER_VALUE\}\}/g, userValue);
+    
+    let userValue = typeof init?.user === 'string' ?
+    init.user :
+    (typeof init?.detail === 'string') ? init.detail.split('@')[0] || '' : '';
+    const passwordValue = init?.password ?? await ConfigService.getPassword(init?.label || '') ?? '';
+    let html = ViewHelper.setDynamicValues(htmlPath, {
+        TITLE: init ? LangService.t('editConnectionTitle') : LangService.t('addConnectionTitle'),
+        SUBMIT: init ? LangService.t('submitSave') : LangService.t('submitAdd'),
+        GLOBAL: LangService.t('global'),
+        TYPE_LABEL: LangService.t('typeLabel'),
+        SSH: LangService.t('ssh'),
+        FTP: LangService.t('ftp'),
+        NAME: LangService.t('name'),
+        HOST: LangService.t('host'),
+        PORT: LangService.t('port'),
+        USER: LangService.t('user'),
+        AUTH_METHOD_LABEL: LangService.t('authMethodLabel'),
+        PASSWORD: LangService.t('password'),
+        SHOW_PASSWORD: LangService.t('showPassword'),
+        HIDE_PASSWORD: LangService.t('hidePassword'),
+        COPY_PASSWORD: LangService.t('copyPassword'),
+        SSH_KEY: LangService.t('sshKey'),
+        PASSWORD_SELECTED: init?.authMethod === 'password' ? 'selected' : '',
+        KEY_SELECTED: init?.authMethod === 'privateKey' ? 'selected' : '',
+        PASSWORD_VALUE: passwordValue,
+        AUTH_FILE_LABEL: LangService.t('authFileLabel'),
+        AUTH_FILE_PLACEHOLDER: LangService.t('authFilePlaceholder'),
+        AUTH_FILE_VALUE: init?.authFile || '',
+        PICK_FILE: LangService.t('pickFile'),
+        CANCEL: LangService.t('cancel'),
+        SSH_SELECTED: init?.type === 'ssh' ? 'selected' : '',
+        FTP_SELECTED: init?.type === 'ftp' ? 'selected' : '',
+        LABEL_VALUE: init?.label ? (init.label.replace(/^\w+: /, '')) : '',
+        HOST_VALUE: hostValue,
+        PORT_VALUE: String(init?.port ?? '22'),
+        USER_VALUE: userValue
+    });
+
+    LoggerService.log(`[password]:${passwordValue}`);
+
     return html;
 }

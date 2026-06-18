@@ -358,7 +358,7 @@ export function registerConnectionCommands(saveConnection: Function) {
       vscode.ViewColumn.One,
       { enableScripts: true }
     );
-    panel.webview.html = getAddConnectionHtml();
+    panel.webview.html = await getAddConnectionHtml();
     panel.webview.onDidReceiveMessage(
       async (message) => {
         if (message.command === 'add') {
@@ -398,7 +398,7 @@ export function registerConnectionCommands(saveConnection: Function) {
       vscode.ViewColumn.One,
       { enableScripts: true }
     );
-    panel.webview.html = getAddConnectionHtml(connection);
+    panel.webview.html = await getAddConnectionHtml(connection);
     panel.webview.onDidReceiveMessage(
       async (message) => {
         if (message.command === 'add') {

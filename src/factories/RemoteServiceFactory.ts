@@ -24,9 +24,6 @@ export function createRemoteService(connection: ConnectionItem): RemoteService {
     LoggerService.show();
     throw new Error(LangService.t('connectionNotFound'));
   }
-  if (connection.type === 'ftp') {
-    return new FtpRemoteService(connection);
-  } else {
-    return new SshRemoteService(connection);
-  }
+
+  return connection.type === 'ftp' ? new FtpRemoteService(connection) : new SshRemoteService(connection);
 }
