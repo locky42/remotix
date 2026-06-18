@@ -33,6 +33,9 @@
   "config.ftpUploadConcurrency.description": "Maximum parallel FTP file uploads when uploading folders.",
   "config.sshDownloadConcurrency.description": "Maximum parallel SSH file downloads per folder when downloading folders.",
   "config.sshUploadConcurrency.description": "Maximum parallel SSH file uploads per folder when uploading folders.",
+  "config.logLevel.description": "Log level",
+  "config.logLevel.item.debug": "Debug",
+  "config.logLevel.item.error": "Only errors",
   "view.container.title": "Remotix",
   "view.panel.name": "Remotix Panel"
 }

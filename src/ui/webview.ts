@@ -4,7 +4,6 @@ import { ConnectionItem } from '../types';
 import { ViewHelper } from '../helpers/ViewHelper';
 import { LangService } from '../services/LangService';
 import { ConfigService } from '../services/ConfigService';
-import { LoggerService } from '../services/LoggerService';
 
 export async function getAddConnectionHtml(init?: Partial<ConnectionItem>): Promise<string> {
     let htmlPath = path.join(__dirname, '../static/ui/addConnection.html');
@@ -56,8 +55,6 @@ export async function getAddConnectionHtml(init?: Partial<ConnectionItem>): Prom
         PORT_VALUE: String(init?.port ?? '22'),
         USER_VALUE: userValue
     });
-
-    LoggerService.log(`[password]:${passwordValue}`);
 
     return html;
 }

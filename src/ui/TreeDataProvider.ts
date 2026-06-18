@@ -184,20 +184,19 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
     const { LoggerService } = await import('../services/LoggerService');
     const elementAny = element as any;
     const elementPath = elementAny?.sshPath || elementAny?.ftpPath || '.';
-    LoggerService.log('------------------------------');
-    LoggerService.log('[TreeDataProvider][DEBUG] getChildren ENTRY');
-    LoggerService.log(`[TreeDataProvider][DEBUG] element: ${element ? `label=${String(elementAny?.label || '')}, context=${String(elementAny?.contextValue || '')}, path=${String(elementPath)}` : 'undefined'}`);
+    LoggerService.log('getChildren ENTRY', 'TreeDataProvider', 'info');
+    LoggerService.log(`element: ${element ? `label=${String(elementAny?.label || '')}, context=${String(elementAny?.contextValue || '')}, path=${String(elementPath)}` : 'undefined'}`, 'TreeDataProvider', 'info');
     const elementLabel = element ? String((element as any).connectionLabel || (element as any).label || '') : undefined;
     if (this.treeLocker.isLockedFor(elementLabel)) {
       if (element) {
         this.treeLocker.notifyBlockedActivity();
-        LoggerService.log(`[TreeDataProvider][DEBUG] Tree is locked for current connection (${elementLabel}), returning []`);
+        LoggerService.log(`Tree is locked for current connection (${elementLabel}), returning []`, 'TreeDataProvider', 'info');
         return [];
       }
-      LoggerService.log('[TreeDataProvider][DEBUG] Tree is locked, but root remains available for connection management');
+      LoggerService.log('Tree is locked, but root remains available for connection management', 'TreeDataProvider', 'info');
     }
     if (!element) {
-      LoggerService.log('[TreeDataProvider][DEBUG] No element, returning root items');
+      LoggerService.log('No element, returning root items', 'TreeDataProvider', 'info');
       const addItem = this.itemFactory.createAddConnectionItem();
       let connections = this.connectionManager.getAll();
       
@@ -220,9 +219,8 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
         return item;
       });
       const labels = connectionItems.map(i => String(i.label));
-      LoggerService.log(`[TreeDataProvider][DEBUG] connectionItems: count=${labels.length}, preview=[${labels.slice(0, 5).join(', ')}${labels.length > 5 ? ', ...' : ''}]`);
-      LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (root)');
-      LoggerService.log('------------------------------');
+      LoggerService.log(`connectionItems: count=${labels.length}, preview=[${labels.slice(0, 5).join(', ')}${labels.length > 5 ? ', ...' : ''}]`, 'TreeDataProvider', 'info');
+      LoggerService.log('getChildren EXIT (root)', 'TreeDataProvider', 'info');
       return [addItem, ...connectionItems];
     }
     if (element && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active' || (element as any).contextValue === 'ssh-folder' || (element as any).contextValue === 'ftp-folder')) {
@@ -231,34 +229,32 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
       const isExpandingNow = (this as any).allowExpandOnce === label;
 
       if (!hasSession && !isExpandingNow && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active')) {
-        LoggerService.log('[TreeDataProvider][DEBUG] Single click connection expand suppressed');
+        LoggerService.log('Single click connection expand suppressed', 'TreeDataProvider', 'info');
         return [];
       }
 
       if (this.suppressConnectionExpand && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active')) {
-        LoggerService.log('[TreeDataProvider][DEBUG] Connection expand suppressed during reorder drag');
+        LoggerService.log('Connection expand suppressed during reorder drag', 'TreeDataProvider', 'info');
         return [];
       }
 
-      LoggerService.log(`[TreeDataProvider][DEBUG] label: ${label}`);
+      LoggerService.log(`label: ${label}`, 'TreeDataProvider', 'info');
       
       if (this.isReordering) {
-        LoggerService.log(`[TreeDataProvider][DEBUG] Skipping connection during reorder for ${label}`);
+        LoggerService.log(`Skipping connection during reorder for ${label}`, 'TreeDataProvider', 'info');
         return [];
       }
       
       if (SessionProvider.isManuallyClosed(String(label))) {
-        LoggerService.log(`[TreeDataProvider][DEBUG] Connection ${label} was manually closed, returning [] without reconnect`);
-        LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (manually closed)');
-        LoggerService.log('------------------------------');
+        LoggerService.log(`Connection ${label} was manually closed, returning [] without reconnect`, 'TreeDataProvider', 'info');
+        LoggerService.log('getChildren EXIT (manually closed)', 'TreeDataProvider', 'info');
         return [];
       }
       const connection = this.getConnectionByLabel(label);
-      LoggerService.log(`[TreeDataProvider][DEBUG] connection: ${connection ? `type=${connection.type}, host=${connection.host}, port=${connection.port}, user=${connection.user}` : 'undefined'}`);
+      LoggerService.log(`connection: ${connection ? `type=${connection.type}, host=${connection.host}, port=${connection.port}, user=${connection.user}` : 'undefined'}`, 'TreeDataProvider', 'info');
       if (!connection) {
-        LoggerService.log('[TreeDataProvider][DEBUG] No connection found, returning []');
-        LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (no conn)');
-        LoggerService.log('------------------------------');
+        LoggerService.log('No connection found, returning []', 'TreeDataProvider', 'info');
+        LoggerService.log('getChildren EXIT (no conn)', 'TreeDataProvider', 'info');
         return [];
       }
     
@@ -267,19 +263,18 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
       if (!remoteService) {
         return [];
       } else {
-        LoggerService.log(`[TreeDataProvider][DEBUG] Using cached remoteService for ${label}`);
+        LoggerService.log(`Using cached remoteService for ${label}`, 'TreeDataProvider', 'info');
       }
-      LoggerService.log(`[TreeDataProvider][DEBUG] remoteService: ${remoteService ? remoteService.constructor.name : 'undefined'}`);
+      LoggerService.log(`remoteService: ${remoteService ? remoteService.constructor.name : 'undefined'}`, 'TreeDataProvider', 'info');
       if (!remoteService) {
-        LoggerService.log('[TreeDataProvider][DEBUG] No remoteService, returning []');
-        LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (no remoteService)');
-        LoggerService.log('------------------------------');
+        LoggerService.log('No remoteService, returning []', 'TreeDataProvider', 'info');
+        LoggerService.log('getChildren EXIT (no remoteService)', 'TreeDataProvider', 'info');
         return [];
       }
       const path = (element as any).sshPath || (element as any).ftpPath || '.';
-      LoggerService.log(`[TreeDataProvider][DEBUG] path: ${path}`);
+      LoggerService.log(`path: ${path}`, 'TreeDataProvider', 'info');
       if (typeof remoteService.listDirectory === 'function') {
-        LoggerService.log('[TreeDataProvider][DEBUG] Calling remoteService.listDirectory...');
+        LoggerService.log('Calling remoteService.listDirectory...', 'TreeDataProvider', 'info');
         const result = await remoteService.listDirectory(path, label);
         result.forEach((child: vscode.TreeItem) => {
           const childAny = child as any;
@@ -289,19 +284,16 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
             this.elementIndex.set(this.buildElementKey(String(childLabel), String(childAny.contextValue), String(childPath)), child);
           }
         });
-        LoggerService.log(`[TreeDataProvider][DEBUG] listDirectory returned ${Array.isArray(result) ? result.length : 'non-array'} items`);
-        LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (listDirectory)');
-        LoggerService.log('------------------------------');
+        LoggerService.log(`listDirectory returned ${Array.isArray(result) ? result.length : 'non-array'} items`, 'TreeDataProvider', 'info');
+        LoggerService.log('getChildren EXIT (listDirectory)', 'TreeDataProvider', 'info');
         return result;
       }
-      LoggerService.log('[TreeDataProvider][DEBUG] remoteService.listDirectory is not a function, returning []');
-      LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (no listDirectory)');
-      LoggerService.log('------------------------------');
+      LoggerService.log('remoteService.listDirectory is not a function, returning []', 'TreeDataProvider', 'info');
+      LoggerService.log('getChildren EXIT (no listDirectory)', 'TreeDataProvider', 'info');
       return [];
     }
-    LoggerService.log('[TreeDataProvider][DEBUG] element did not match any known contextValue, returning []');
-    LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (default)');
-    LoggerService.log('------------------------------');
+    LoggerService.log('[TreeDataProvider][DEBUG] element did not match any known contextValue, returning []', 'TreeDataProvider', 'info');
+    LoggerService.log('[TreeDataProvider][DEBUG] getChildren EXIT (default)', 'TreeDataProvider', 'info');
     return [];
   }
 

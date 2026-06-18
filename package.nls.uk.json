@@ -33,6 +33,9 @@
   "config.ftpUploadConcurrency.description": "Максимальна кількість паралельних FTP-вивантажень файлів під час вивантаження папки.",
   "config.sshDownloadConcurrency.description": "Максимальна кількість паралельних SSH-завантажень файлів у межах папки під час завантаження папки.",
   "config.sshUploadConcurrency.description": "Максимальна кількість паралельних SSH-вивантажень файлів у межах папки під час вивантаження папки.",
+  "config.logLevel.description": "Рівень логування.",
+  "config.logLevel.item.debug": "Налагодження",
+  "config.logLevel.item.error": "Тільки помилки",
   "view.container.title": "Remotix",
   "view.panel.name": "Панель Remotix"
 }

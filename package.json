@@ -385,6 +385,20 @@
           "minimum": 1,
           "maximum": 10,
           "description": "%config.sshDownloadConcurrency.description%"
+        },
+        "remotix.logLevel": {
+          "type": "string",
+          "default": "error",
+          "order": 6,
+          "enum": [
+            "error",
+            "debug"
+          ],
+          "enumItemLabels": [
+            "%config.logLevel.item.error%",
+            "%config.logLevel.item.debug%"
+          ],
+          "description": "%config.logLevel.description%"
         }
       }
     },

@@ -29,7 +29,7 @@ export class FtpRemoteService implements RemoteService {
 
   constructor(connection: ConnectionItem) {
     this.connection = connection;
-    LoggerService.log('[FTP] FtpRemoteService instance created.');
+    LoggerService.log('FtpRemoteService instance created.', 'FtpRemoteService', 'info');
   }
 
   public detectModeFromEntry(fileEntry: any): string | undefined {
@@ -104,13 +104,13 @@ export class FtpRemoteService implements RemoteService {
     let lastError: any;
     const primaryCommand = `SITE CHMOD ${mode} ${absolutePath}`;
     try {
-      LoggerService.log(`[FTP][CHMOD] TRY command="${primaryCommand}"`);
+      LoggerService.log(`TRY command="${primaryCommand}"`, 'FtpRemoteService', 'info');
       await client.send(primaryCommand);
-      LoggerService.log(`[FTP][CHMOD] OK command="${primaryCommand}"`);
+      LoggerService.log(`OK command="${primaryCommand}"`, 'FtpRemoteService', 'info');
       return;
     } catch (err: any) {
       lastError = err;
-      LoggerService.log(`[FTP][CHMOD] FAIL command="${primaryCommand}" error=${err?.message || String(err)}`);
+      LoggerService.log(`FAIL command="${primaryCommand}" error=${err?.message || String(err)}`, 'FtpRemoteService', 'error');
     }
 
     // Fallback for servers that only allow chmod by leaf name in parent cwd.
@@ -119,16 +119,16 @@ export class FtpRemoteService implements RemoteService {
     if (leafName) {
       const previousDir = await client.pwd().catch(() => '/');
       try {
-        LoggerService.log(`[FTP][CHMOD] TRY cd parent for leaf chmod parent=${parentPath} leaf=${leafName}`);
+        LoggerService.log(`TRY cd parent for leaf chmod parent=${parentPath} leaf=${leafName}`, 'FtpRemoteService', 'info');
         await client.cd(parentPath);
         const fallbackCommand = `SITE CHMOD ${mode} ${leafName}`;
-        LoggerService.log(`[FTP][CHMOD] TRY command="${fallbackCommand}" (cwd=${parentPath})`);
+        LoggerService.log(`TRY command="${fallbackCommand}" (cwd=${parentPath})`, 'FtpRemoteService', 'info');
         await client.send(fallbackCommand);
-        LoggerService.log(`[FTP][CHMOD] OK command="${fallbackCommand}" (cwd=${parentPath})`);
+        LoggerService.log(`OK command="${fallbackCommand}" (cwd=${parentPath})`, 'FtpRemoteService', 'info');
         return;
       } catch (err: any) {
         lastError = err;
-        LoggerService.log(`[FTP][CHMOD] FAIL fallback parent=${parentPath} leaf=${leafName} error=${err?.message || String(err)}`);
+        LoggerService.log(`FAIL fallback parent=${parentPath} leaf=${leafName} error=${err?.message || String(err)}`, 'FtpRemoteService', 'error');
       } finally {
         try {
           await client.cd(previousDir);
@@ -266,11 +266,11 @@ export class FtpRemoteService implements RemoteService {
       }
 
       const absolutePath = RemotePathHelper.toAbsoluteRemotePath(remotePath, this.initialPath);
-      LoggerService.log(`[FTP][CHMOD] START mode=${mode} recursive=${String(options.recursive)} target=${options.applyTo} path=${absolutePath}`);
+      LoggerService.log(`START mode=${mode} recursive=${String(options.recursive)} target=${options.applyTo} path=${absolutePath}`, 'FtpRemoteService', 'info');
 
       if (!options.recursive) {
         await this.applyFtpChmod(session, absolutePath, mode);
-        LoggerService.log(`[FTP][CHMOD] END success path=${absolutePath}`);
+        LoggerService.log(`END success path=${absolutePath}`, 'FtpRemoteService', 'info');
         return;
       }
 
@@ -281,7 +281,7 @@ export class FtpRemoteService implements RemoteService {
       }
 
       await this.chmodRecursiveFtp(session, absolutePath, mode, options.applyTo, stats);
-      LoggerService.log(`[FTP][CHMOD] END success path=${absolutePath} stats(files=${stats.files}, dirs=${stats.dirs})`);
+      LoggerService.log(`END success path=${absolutePath} stats(files=${stats.files}, dirs=${stats.dirs})`, 'FtpRemoteService', 'info');
     });
   }
 
@@ -317,7 +317,7 @@ export class FtpRemoteService implements RemoteService {
     return new Promise(async (resolve, reject) => {
       await this.ensurePasswordLoaded();
       const ftpClient = new FtpClient();
-      LoggerService.log(`[FtpRemoteService] Connecting to FTP (always new connection, label: ${this.connection.label})...`);
+      LoggerService.log(`Connecting to FTP (always new connection, label: ${this.connection.label})...`, 'FtpRemoteService', 'info');
 
       try {
         await ftpClient.access({
@@ -330,20 +330,20 @@ export class FtpRemoteService implements RemoteService {
         });
 
         this.initialPath = RemotePathHelper.normalizeAbsolutePath(await ftpClient.pwd()); 
-        LoggerService.log(`[FTP] Initial directory: ${this.initialPath}`);
+        LoggerService.log(`Initial directory: ${this.initialPath}`, 'FtpRemoteService', 'info');
 
-        LoggerService.log('[FtpRemoteService] FTP connection ready');
+        LoggerService.log('FTP connection ready', 'FtpRemoteService', 'info');
         
         (ftpClient as any).isConnected = true;
         SessionProvider.setSession(this.connection.label, ftpClient);
         ftpClient.ftp.socket.on('close', () => {
-          LoggerService.log('[FtpRemoteService] FTP connection ended');
+          LoggerService.log('FTP connection ended', 'FtpRemoteService', 'info');
           (ftpClient as any).isConnected = false;
           SessionProvider.closeSession(this.connection.label);
         });
 
         ftpClient.ftp.socket.on('error', (err: any) => {
-          LoggerService.log(`[FtpRemoteService] FTP socket error: ${err.message}`);
+          LoggerService.log(`FTP socket error: ${err.message}`, 'FtpRemoteService', 'error');
           (ftpClient as any).isConnected = false;
           SessionProvider.closeSession(this.connection.label);
         });
@@ -351,7 +351,7 @@ export class FtpRemoteService implements RemoteService {
         resolve(ftpClient);
 
       } catch (err: any) {
-        LoggerService.log(`[FtpRemoteService] FTP connection error: ${err.message}`);
+        LoggerService.log(`FTP connection error: ${err.message}`, 'FtpRemoteService', 'error');
         (ftpClient as any).isConnected = false;
         SessionProvider.closeSession(this.connection.label);
         
@@ -363,8 +363,7 @@ export class FtpRemoteService implements RemoteService {
 
   async listDirectory(path: string): Promise<vscode.TreeItem[]> {
     return this._mutex.acquire(async () => {
-      LoggerService.log('==============================');
-      LoggerService.log(`[FTP][DEBUG] listDirectory ENTRY: path=${path}, label=${this.connection.label}`);
+      LoggerService.log(`listDirectory ENTRY: path=${path}, label=${this.connection.label}`, 'FtpRemoteService', 'info');
 
       try {
         const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
@@ -384,7 +383,7 @@ export class FtpRemoteService implements RemoteService {
           list = await session.list(requestPath);
         } catch (err: any) {
           if (this.initialPath.startsWith(requestPath) && requestPath !== this.initialPath) {
-            LoggerService.log(`[FTP][DEBUG] Permission denied on path chain, restoring virtual child.`);
+            LoggerService.log(`Permission denied on path chain, restoring virtual child.`, 'FtpRemoteService', 'info');
             
             vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: err.message }));
 
@@ -464,13 +463,12 @@ export class FtpRemoteService implements RemoteService {
 
         RemoteTreeViewHelper.sortTreeItems(items, 'uk');
 
-        LoggerService.log(`[FTP][DEBUG] Returning ${items.length} tree items. EXIT`);
-        LoggerService.log('==============================');
+        LoggerService.log(`Returning ${items.length} tree items. EXIT`, 'FtpRemoteService', 'info');
         return items;
 
       } catch (e: any) {
         const msg = e.message || String(e);
-        LoggerService.log(`[FTP][ERROR] Exception in listDirectory: ${msg}`);
+        LoggerService.log(`Exception in listDirectory: ${msg}`, 'FtpRemoteService', 'error');
         vscode.window.showErrorMessage(LangService.t('ftpErrorMessage', { error: msg }));
         return [];
       }
@@ -480,7 +478,7 @@ export class FtpRemoteService implements RemoteService {
   async downloadWithDialogs(item: any): Promise<void> {
     const isDirectory = item?.contextValue === 'ssh-folder' || item?.contextValue === 'ftp-folder';
     const selectedPath = item?.ftpPath || item?.sshPath || item?.item?.name || 'unknown';
-    LoggerService.log(`[FTP][DOWNLOAD] START dialog type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`);
+    LoggerService.log(`START dialog type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`, 'FtpRemoteService', 'info');
     const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
     const uri = await vscode.window.showOpenDialog({
       canSelectFolders: true,
@@ -497,9 +495,9 @@ export class FtpRemoteService implements RemoteService {
         await this.download(item, localTarget);
       }
       vscode.window.showInformationMessage(LangService.t('downloadSuccess'));
-      LoggerService.log(`[FTP][DOWNLOAD] END success type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`);
+      LoggerService.log(`END success type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`, 'FtpRemoteService', 'info');
     } catch (err: any) {
-      LoggerService.log(`[FTP][DOWNLOAD] END fail type=${isDirectory ? 'directory' : 'file'} path=${selectedPath} error=${err?.message || String(err)}`);
+      LoggerService.log(`END fail type=${isDirectory ? 'directory' : 'file'} path=${selectedPath} error=${err?.message || String(err)}`, 'FtpRemoteService', 'error');
       vscode.window.showErrorMessage(LangService.t('downloadError', { error: err.message }));
     }
   }
@@ -519,13 +517,13 @@ export class FtpRemoteService implements RemoteService {
       throw new Error(LangService.t('ftpSessionNotInitializedOrClosed'));
     }
 
-    LoggerService.log(`[FTP][DOWNLOAD FILE] START: ${remotePath} -> ${localDest}`);
+    LoggerService.log(`START: ${remotePath} -> ${localDest}`, 'FtpRemoteService', 'info');
 
     try {
       await session.downloadTo(localDest, remotePath);
-      LoggerService.log(`[FTP][DOWNLOAD FILE] END success: ${localDest}`);
+      LoggerService.log(`END success: ${localDest}`, 'FtpRemoteService', 'info');
     } catch (err: any) {
-      LoggerService.log(`[FTP][DOWNLOAD FILE] END fail: ${remotePath} error=${err.message}`);
+      LoggerService.log(`END fail: ${remotePath} error=${err.message}`, 'FtpRemoteService', 'error');
       throw err;
     }
   }
@@ -542,7 +540,7 @@ export class FtpRemoteService implements RemoteService {
       const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
       if (!session || (session as any).closed) throw new Error(LangService.t('ftpSessionNotInitialized'));
 
-      LoggerService.log(`[FTP][DOWNLOAD DIR] START: ${remoteDir} -> ${localDest}`);
+      LoggerService.log(`START: ${remoteDir} -> ${localDest}`, 'FtpRemoteService', 'info');
       try {
         const filesToDownload: Array<{ remotePath: string; localPath: string }> = [];
         const collectFiles = async (rDir: string, lDir: string): Promise<void> => {
@@ -562,7 +560,7 @@ export class FtpRemoteService implements RemoteService {
         };
 
         await collectFiles(remoteDir, localDest);
-        LoggerService.log(`[FTP][DOWNLOAD DIR] QUEUE built: ${filesToDownload.length} files`);
+        LoggerService.log(`QUEUE built: ${filesToDownload.length} files`);
 
         const CONCURRENCY_LIMIT = ConfigService.getConcurrencyLimit('ftpDownloadConcurrency', 3);
         const queue = [...filesToDownload];
@@ -581,10 +579,10 @@ export class FtpRemoteService implements RemoteService {
               if (!job) {
                 continue;
               }
-              LoggerService.log(`[FTP][DOWNLOAD DIR][FILE] START: ${job.remotePath}`);
+              LoggerService.log(`START: ${job.remotePath}`, 'FtpRemoteService', 'info');
               await worker.downloadTo(job.localPath, job.remotePath);
               downloadedCount++;
-              LoggerService.log(`[FTP][DOWNLOAD DIR][FILE] END: ${job.remotePath}`);
+              LoggerService.log(`END: ${job.remotePath}`, 'FtpRemoteService', 'info');
               vscode.window.setStatusBarMessage(
                 LangService.t('downloadProgressStatus', { downloaded: downloadedCount, total: filesToDownload.length }),
                 2000
@@ -602,9 +600,9 @@ export class FtpRemoteService implements RemoteService {
           }
         }
 
-        LoggerService.log(`[FTP][DOWNLOAD DIR] END success: ${remoteDir}`);
+        LoggerService.log(`END success: ${remoteDir}`, 'FtpRemoteService', 'info');
       } catch (err: any) {
-        LoggerService.log(`[FTP][DOWNLOAD DIR] END fail: ${remoteDir} error=${err?.message || String(err)}`);
+        LoggerService.log(`END fail: ${remoteDir} error=${err?.message || String(err)}`, 'FtpRemoteService', 'error');
         throw err;
       }
     });
@@ -613,17 +611,17 @@ export class FtpRemoteService implements RemoteService {
   async uploadWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
     const targetPath = item?.sshPath || item?.ftpPath;
-    LoggerService.log(`[FTP][UPLOAD] START dialog target=${targetPath || 'unknown'}`);
+    LoggerService.log(`START dialog target=${targetPath || 'unknown'}`, 'FtpRemoteService', 'info');
     if (!targetPath) {
       vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
-      LoggerService.log('[FTP][UPLOAD] END fail: missing target path');
+      LoggerService.log('END fail: missing target path', 'FtpRemoteService', 'error');
       return;
     }
 
     const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
     if (!session) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
-      LoggerService.log('[FTP][UPLOAD] END fail: no active session');
+      LoggerService.log('END fail: no active session', 'FtpRemoteService', 'error');
       return;
     }
     
@@ -649,22 +647,22 @@ export class FtpRemoteService implements RemoteService {
     });
 
     if (!uris || uris.length === 0) {
-      LoggerService.log('[FTP][uploadWithDialogs] No files/folders selected');
-      LoggerService.log('[FTP][UPLOAD] END canceled: no selection');
+      LoggerService.log(`No files/folders selected`, 'FtpRemoteService', 'info');
+      LoggerService.log(`END canceled: no selection`, 'FtpRemoteService', 'info');
       return;
     }
-    LoggerService.log('[FTP][uploadWithDialogs] Selected URIs:');
-    uris.forEach((uri: any) => LoggerService.logObject('[FTP][uploadWithDialogs] URI', uri));
+    LoggerService.log(`Selected URIs:`, 'FtpRemoteService', 'info');
+    uris.forEach((uri: any) => LoggerService.log(`URI: ${uri.fsPath}`, 'FtpRemoteService', 'info'));
     const pathMod = require('path');
     const fs = require('fs');
     let anyError = false;
     for (const uri of uris) {
       const localPath = uri.fsPath;
-      LoggerService.log(`[FTP][uploadWithDialogs] Processing localPath: ${localPath}`);
+      LoggerService.log(`Processing localPath: ${localPath}`, 'FtpRemoteService', 'info');
       let uploadTarget = targetPath;
       try {
         const stat = fs.statSync(localPath);
-        LoggerService.log(`[FTP][uploadWithDialogs] Stat: isDirectory=${stat.isDirectory()}, isFile=${stat.isFile()}`);
+        LoggerService.log(`Stat: isDirectory=${stat.isDirectory()}, isFile=${stat.isFile()}`, 'FtpRemoteService', 'info');
         if (stat.isDirectory()) {
           uploadTarget = pathMod.join(targetPath, pathMod.basename(localPath));
           await this.uploadDir(localPath, uploadTarget);
@@ -673,15 +671,15 @@ export class FtpRemoteService implements RemoteService {
         }
       } catch (e: any) {
         anyError = true;
-        LoggerService.log(`[FTP][uploadWithDialogs][ERROR] ${e instanceof Error ? e.message : String(e)}`);
+        LoggerService.log(`${e instanceof Error ? e.message : String(e)}`, 'FtpRemoteService', 'error');
         vscode.window.showErrorMessage(LangService.t('uploadError', { error: (e instanceof Error ? e.message : String(e)) }));
       }
     }
     if (!anyError) {
       vscode.window.showInformationMessage(LangService.t('uploadSuccess'));
-      LoggerService.log(`[FTP][UPLOAD] END success target=${targetPath}`);
+      LoggerService.log(`END success target=${targetPath}`, 'FtpRemoteService', 'info');
     } else {
-      LoggerService.log(`[FTP][UPLOAD] END fail target=${targetPath}`);
+      LoggerService.log(`END fail target=${targetPath}`, 'FtpRemoteService', 'error');
     }
     const refreshPath = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder'
       ? targetPath
@@ -698,13 +696,13 @@ export class FtpRemoteService implements RemoteService {
         throw new Error(LangService.t('ftpSessionNotInitializedForConnection', { label: this.connection.label }));
       }
 
-      LoggerService.log(`[FTP][UPLOAD FILE] START: ${localPath} -> ${remotePath}`);
+      LoggerService.log(`START: ${localPath} -> ${remotePath}`, 'FtpRemoteService', 'info');
       
       try {
         await session.uploadFrom(localPath, remotePath);
-        LoggerService.log(`[FTP][UPLOAD FILE] END success: ${remotePath}`);
+        LoggerService.log(`END success: ${remotePath}`, 'FtpRemoteService', 'info');
       } catch (err: any) {
-        LoggerService.log(`[FTP][UPLOAD FILE] END fail: ${remotePath} error=${err.message}`);
+        LoggerService.log(`END fail: ${remotePath} error=${err.message}`, 'FtpRemoteService', 'error');
         throw err;
       }
     });
@@ -718,7 +716,7 @@ export class FtpRemoteService implements RemoteService {
         throw new Error(LangService.t('ftpSessionNotInitializedForConnection', { label: this.connection.label }));
       }
 
-      LoggerService.log(`[FTP][UPLOAD DIR] START: ${localDir} -> ${remoteDir}`);
+      LoggerService.log(`START: ${localDir} -> ${remoteDir}`, 'FtpRemoteService', 'info');
 
       const fs = require('fs');
       const pathMod = require('path');
@@ -732,7 +730,7 @@ export class FtpRemoteService implements RemoteService {
         const collect = async (currentLocalDir: string, currentRemoteDir: string): Promise<void> => {
           const realDir = await fs.promises.realpath(currentLocalDir).catch(() => currentLocalDir);
           if (visitedRealDirs.has(realDir)) {
-            LoggerService.log(`[FTP][UPLOAD DIR][SKIP] Already visited local dir (cycle guard): ${currentLocalDir}`);
+            LoggerService.log(`SKIP: Already visited local dir (cycle guard): ${currentLocalDir}`, 'FtpRemoteService', 'info');
             return;
           }
           visitedRealDirs.add(realDir);
@@ -743,7 +741,7 @@ export class FtpRemoteService implements RemoteService {
             const src = pathMod.join(currentLocalDir, entry.name);
             const dest = `${currentRemoteDir}/${entry.name}`.replace(/\\/g, '/');
             if (entry.isSymbolicLink && entry.isSymbolicLink()) {
-              LoggerService.log(`[FTP][UPLOAD DIR][SKIP] Symbolic link: ${src}`);
+              LoggerService.log(`SKIP: Symbolic link: ${src}`, 'FtpRemoteService', 'info');
               continue;
             }
             if (entry.isDirectory()) {
@@ -755,30 +753,30 @@ export class FtpRemoteService implements RemoteService {
         };
 
         await collect(localDir, normalizedRoot);
-        LoggerService.log(`[FTP][UPLOAD DIR] QUEUE built: dirs=${dirsToEnsure.length}, files=${fileJobs.length}`);
+        LoggerService.log(`QUEUE built: dirs=${dirsToEnsure.length}, files=${fileJobs.length}`, 'FtpRemoteService', 'info');
 
         const previousDir = await session.pwd().catch(() => '/');
-        LoggerService.log(`[FTP][UPLOAD DIR] BASE dir before ensure: ${previousDir}`);
+        LoggerService.log(`BASE dir before ensure: ${previousDir}`, 'FtpRemoteService', 'info');
         try {
           for (const dir of Array.from(new Set(dirsToEnsure))) {
             // ensureDir changes current directory; reset to base so relative paths stay stable
             await session.cd(previousDir);
-            LoggerService.log(`[FTP][UPLOAD DIR][MKDIR] START base=${previousDir} ensure=${dir}`);
+            LoggerService.log(`START base=${previousDir} ensure=${dir}`, 'FtpRemoteService', 'info');
             try {
               await session.ensureDir(dir);
-              LoggerService.log(`[FTP][UPLOAD DIR][MKDIR] END success ensure=${dir}`);
+              LoggerService.log(`END success ensure=${dir}`, 'FtpRemoteService', 'info');
             } catch (mkdirErr: any) {
-              LoggerService.log(`[FTP][UPLOAD DIR][MKDIR] END fail ensure=${dir} error=${mkdirErr?.message || String(mkdirErr)}`);
+              LoggerService.log(`END fail ensure=${dir} error=${mkdirErr?.message || String(mkdirErr)}`, 'FtpRemoteService', 'error');
               throw mkdirErr;
             }
           }
         } finally {
           try {
             await session.cd(previousDir);
-            LoggerService.log(`[FTP][UPLOAD DIR] Restored base dir: ${previousDir}`);
+            LoggerService.log(`Restored base dir: ${previousDir}`, 'FtpRemoteService', 'info');
           } catch {
             await session.cd('/');
-            LoggerService.log('[FTP][UPLOAD DIR] Failed to restore base dir, moved to /');
+            LoggerService.log('Failed to restore base dir, moved to /', 'FtpRemoteService', 'error');
           }
         }
 
@@ -799,15 +797,15 @@ export class FtpRemoteService implements RemoteService {
               if (!job) {
                 continue;
               }
-              LoggerService.log(`[FTP][UPLOAD DIR][FILE] START: ${job.localPath} -> ${job.remotePath}`);
+              LoggerService.log(`START: ${job.localPath} -> ${job.remotePath}`, 'FtpRemoteService', 'info');
               try {
                 await worker.uploadFrom(job.localPath, job.remotePath);
               } catch (uploadErr: any) {
-                LoggerService.log(`[FTP][UPLOAD DIR][FILE] END fail: ${job.remotePath} error=${uploadErr?.message || String(uploadErr)}`);
+                LoggerService.log(`END fail: ${job.remotePath} error=${uploadErr?.message || String(uploadErr)}`, 'FtpRemoteService', 'error');
                 throw uploadErr;
               }
               uploadedCount++;
-              LoggerService.log(`[FTP][UPLOAD DIR][FILE] END: ${job.remotePath}`);
+              LoggerService.log(`END: ${job.remotePath}`, 'FtpRemoteService', 'info');
               vscode.window.setStatusBarMessage(`Remotix: Uploaded ${uploadedCount}/${fileJobs.length} items`, 2000);
             }
           };
@@ -822,9 +820,9 @@ export class FtpRemoteService implements RemoteService {
           }
         }
 
-        LoggerService.log(`[FTP][UPLOAD DIR] END success: ${remoteDir}`);
+        LoggerService.log(`END success: ${remoteDir}`, 'FtpRemoteService', 'info');
       } catch (err: any) {
-        LoggerService.log(`[FTP][UPLOAD DIR] END fail: ${remoteDir} error=${err.message}`);
+        LoggerService.log(`END fail: ${remoteDir} error=${err.message}`, 'FtpRemoteService', 'error');
         throw err;
       }
     });
@@ -871,13 +869,13 @@ export class FtpRemoteService implements RemoteService {
       const tmpPath = pathMod.join(tmpDir, `remotix_empty_${Date.now()}.txt`);
 
       try {
-        LoggerService.log(`[FTP] Creating empty file: ${remotePath}`);
+        LoggerService.log(`Creating empty file: ${remotePath}`, 'FtpRemoteService', 'info');
         fs.writeFileSync(tmpPath, '');
         await session.uploadFrom(tmpPath, remotePath);
         
-        LoggerService.log(`[FTP] File created successfully`);
+        LoggerService.log(`File created successfully`, 'FtpRemoteService', 'info');
       } catch (err: any) {
-        LoggerService.log(`[FTP][ERROR] createFile failed: ${err.message}`);
+        LoggerService.log(`createFile failed: ${err.message}`, 'FtpRemoteService', 'error');
         throw err;
       } finally {
         try {
@@ -885,7 +883,7 @@ export class FtpRemoteService implements RemoteService {
             fs.unlinkSync(tmpPath);
           }
         } catch (cleanupErr) {
-          LoggerService.log(`[FTP] Temp file cleanup error: ${cleanupErr}`);
+          LoggerService.log(`Temp file cleanup error: ${cleanupErr}`, 'FtpRemoteService', 'error');
         }
       }
     });
@@ -894,41 +892,41 @@ export class FtpRemoteService implements RemoteService {
 
   async createFolderWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
-    LoggerService.log('[FTP][createFolderWithDialogs] ENTRY');
-    LoggerService.logObject('[FTP][createFolderWithDialogs] item', item);
+    LoggerService.log('ENTRY', 'FtpRemoteService', 'info');
+    LoggerService.log(item, 'FtpRemoteService', 'info');
     const ftpPath = RemoteCrudDialogHelper.getRemotePath(item);
     if (!ftpPath) {
       vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
       return;
     }
-    LoggerService.log(`[FTP][createFolderWithDialogs] ftpPath: ${ftpPath}`);
+    LoggerService.log(`ftpPath: ${ftpPath}`, 'FtpRemoteService', 'info');
     const newFolderName = await vscode.window.showInputBox({
       prompt: LangService.t('enterNewFolderName'),
       value: LangService.t('defaultNewFolderName')
     });
-    LoggerService.log(`[FTP][createFolderWithDialogs] newFolderName: ${newFolderName}`);
+    LoggerService.log(`newFolderName: ${newFolderName}`, 'FtpRemoteService', 'info');
     if (!newFolderName) {
-      LoggerService.log('[FTP][createFolderWithDialogs] No folder name entered, aborting');
+      LoggerService.log('No folder name entered, aborting', 'FtpRemoteService', 'info');
       return;
     }
     const newFolderPath = RemoteCrudDialogHelper.buildChildPath(ftpPath, item, newFolderName);
-    LoggerService.log(`[FTP][createFolderWithDialogs] newFolderPath: ${newFolderPath}`);
+    LoggerService.log(`newFolderPath: ${newFolderPath}`, 'FtpRemoteService', 'info');
     try {
       await this.createFolder(newFolderPath);
-      LoggerService.log('[FTP][createFolderWithDialogs] Folder created successfully');
+      LoggerService.log('Folder created successfully', 'FtpRemoteService', 'info');
       vscode.window.showInformationMessage(LangService.t('folderCreated', { path: newFolderPath }));
       if (treeDataProvider && typeof treeDataProvider.clearRemoteServiceCache === 'function') {
-        LoggerService.log('[FTP][createFolderWithDialogs] Clearing remoteServiceCache');
+        LoggerService.log('Clearing remoteServiceCache', 'FtpRemoteService', 'info');
         treeDataProvider.clearRemoteServiceCache(this.connection.label);
       }
       const refreshPath = RemoteCrudDialogHelper.getRefreshPath(item, ftpPath);
       RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ftp');
-      LoggerService.log('[FTP][createFolderWithDialogs] folder-level refresh called');
+      LoggerService.log('folder-level refresh called', 'FtpRemoteService', 'info');
     } catch (e: any) {
-      LoggerService.log(`[FTP][createFolderWithDialogs] ERROR: ${e instanceof Error ? e.message : String(e)}`);
+      LoggerService.log(`ERROR: ${e instanceof Error ? e.message : String(e)}`, 'FtpRemoteService', 'error');
       vscode.window.showErrorMessage(LangService.t('createFolderFailed', { error: (e instanceof Error ? e.message : String(e)) }));
     }
-    LoggerService.log('[FTP][createFolderWithDialogs] EXIT');
+    LoggerService.log('EXIT', 'FtpRemoteService', 'info');
   }
 
   async createFolder(remoteDir: string): Promise<void> {
@@ -942,26 +940,26 @@ export class FtpRemoteService implements RemoteService {
       let previousDir = '/';
       try {
         previousDir = await session.pwd();
-        LoggerService.log(`[FTP] Current directory before create: ${previousDir}`);
+        LoggerService.log(`Current directory before create: ${previousDir}`, 'FtpRemoteService', 'info');
       } catch (pwdErr) {
-        LoggerService.log(`[FTP][WARNING] Could not get current directory: ${pwdErr}`);
+        LoggerService.log(`Could not get current directory: ${pwdErr}`, 'FtpRemoteService', 'warning');
       }
 
-      LoggerService.log(`[FTP] Creating directory (ensureDir): ${remoteDir}`);
+      LoggerService.log(`Creating directory (ensureDir): ${remoteDir}`, 'FtpRemoteService', 'info');
 
       try {
         await session.ensureDir(remoteDir);
-        LoggerService.log(`[FTP] Directory created or already exists`);
+        LoggerService.log(`Directory created or already exists`, 'FtpRemoteService', 'info');
 
       } catch (err: any) {
-        LoggerService.log(`[FTP][ERROR] createFolder failed: ${err.message}`);
+        LoggerService.log(`createFolder failed: ${err.message}`, 'FtpRemoteService', 'error');
         throw err;
       } finally {
         try {
           await session.cd(previousDir);
-          LoggerService.log(`[FTP] Returned to directory: ${previousDir}`);
+          LoggerService.log(`Returned to directory: ${previousDir}`, 'FtpRemoteService', 'info');
         } catch (cdErr: any) {
-          LoggerService.log(`[FTP][ERROR] Failed to return to ${previousDir}: ${cdErr.message}`);
+          LoggerService.log(`Failed to return to ${previousDir}: ${cdErr.message}`, 'FtpRemoteService', 'error');
           await session.cd('/'); 
         }
       }
@@ -983,7 +981,7 @@ export class FtpRemoteService implements RemoteService {
       LangService.t('delete')
     );
     if (confirm !== LangService.t('delete')) return;
-    LoggerService.log(`[FTP][DELETE] START type=${isDir ? 'directory' : 'file'} path=${ftpPath}`);
+    LoggerService.log(`START type=${isDir ? 'directory' : 'file'} path=${ftpPath}`, 'FtpRemoteService', 'info');
     treeDataProvider?.treeLocker?.lock(LangService.t('deleteInProgress'), this.connection.label);
     try {
       if (isDir) {
@@ -994,9 +992,9 @@ export class FtpRemoteService implements RemoteService {
         vscode.window.showInformationMessage(LangService.t('fileDeleted', { path: ftpPath }));
       }
       RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, RemotePathHelper.getParentRemotePath(ftpPath), 'ftp');
-      LoggerService.log(`[FTP][DELETE] END success type=${isDir ? 'directory' : 'file'} path=${ftpPath}`);
+      LoggerService.log(`END success type=${isDir ? 'directory' : 'file'} path=${ftpPath}`, 'FtpRemoteService', 'info');
     } catch (e: any) {
-      LoggerService.log(`[FTP][DELETE] END fail type=${isDir ? 'directory' : 'file'} path=${ftpPath} error=${e instanceof Error ? e.message : String(e)}`);
+      LoggerService.log(`END fail type=${isDir ? 'directory' : 'file'} path=${ftpPath} error=${e instanceof Error ? e.message : String(e)}`, 'FtpRemoteService', 'error');
       vscode.window.showErrorMessage(LangService.t('deleteFailed', { error: (e instanceof Error ? e.message : String(e)) }));
     } finally {
       treeDataProvider?.treeLocker?.unlock();
@@ -1012,13 +1010,13 @@ export class FtpRemoteService implements RemoteService {
       }
 
       const absolutePath = RemotePathHelper.toAbsoluteRemotePath(remotePath, this.initialPath);
-      LoggerService.log(`[FTP][DELETE FILE] START: ${remotePath} (absolute=${absolutePath})`);
+      LoggerService.log(`START: ${remotePath} (absolute=${absolutePath})`, 'FtpRemoteService', 'info');
 
       try {
         await session.remove(absolutePath);
-        LoggerService.log(`[FTP][DELETE FILE] END success: ${remotePath}`);
+        LoggerService.log(`END success: ${remotePath}`, 'FtpRemoteService', 'info');
       } catch (err: any) {
-        LoggerService.log(`[FTP][DELETE FILE] END fail: ${remotePath} error=${err.message}`);
+        LoggerService.log(`END fail: ${remotePath} error=${err.message}`, 'FtpRemoteService', 'error');
         throw err;
       }
     });
@@ -1033,14 +1031,14 @@ export class FtpRemoteService implements RemoteService {
       }
 
       const absoluteRemoteDir = RemotePathHelper.toAbsoluteRemotePath(remoteDir, this.initialPath);
-      LoggerService.log(`[FTP][DELETE DIR] START: ${remoteDir} (absolute=${absoluteRemoteDir})`);
+      LoggerService.log(`START: ${remoteDir} (absolute=${absoluteRemoteDir})`, 'FtpRemoteService', 'info');
 
       // Prefer server-side recursive delete first on a separate client with timeout.
       // This prevents the main session from appearing frozen if the server stalls.
       try {
         const nativeTimeoutMs = 12000;
         vscode.window.setStatusBarMessage('Remotix: Deleting directory (server-side)...', 1500);
-        LoggerService.log(`[FTP][DELETE DIR] native-removeDir START: ${absoluteRemoteDir} timeout=${nativeTimeoutMs}ms`);
+        LoggerService.log(`native-removeDir START: ${absoluteRemoteDir} timeout=${nativeTimeoutMs}ms`, 'FtpRemoteService', 'info');
 
         const nativeClient = await this.createWorkerClient();
         try {
@@ -1051,7 +1049,7 @@ export class FtpRemoteService implements RemoteService {
             })
           ]);
 
-          LoggerService.log(`[FTP][DELETE DIR] END success: ${absoluteRemoteDir} strategy=native-removeDir`);
+          LoggerService.log(`END success: ${absoluteRemoteDir} strategy=native-removeDir`, 'FtpRemoteService', 'info');
           return;
         } finally {
           try {
@@ -1060,7 +1058,7 @@ export class FtpRemoteService implements RemoteService {
           }
         }
       } catch (nativeErr: any) {
-        LoggerService.log(`[FTP][DELETE DIR] native-removeDir fail: ${absoluteRemoteDir} error=${nativeErr?.message || String(nativeErr)}; fallback=manual-recursive`);
+        LoggerService.log(`native-removeDir fail: ${absoluteRemoteDir} error=${nativeErr?.message || String(nativeErr)}; fallback=manual-recursive`, 'FtpRemoteService', 'error');
       }
 
       const stats = { files: 0, dirs: 0 };
@@ -1070,7 +1068,7 @@ export class FtpRemoteService implements RemoteService {
         if (step % 10 === 0) {
           vscode.window.setStatusBarMessage(`Remotix: Deleting ${stats.files} files, ${stats.dirs} dirs`, 1500);
         }
-        LoggerService.log(`[FTP][DELETE DIR][PROGRESS] step=${step} stage=${stage} path=${path} files=${stats.files} dirs=${stats.dirs}`);
+        LoggerService.log(`step=${step} stage=${stage} path=${path} files=${stats.files} dirs=${stats.dirs}`, 'FtpRemoteService', 'info');
       };
 
       try {
@@ -1083,9 +1081,9 @@ export class FtpRemoteService implements RemoteService {
           } catch {
           }
         }
-        LoggerService.log(`[FTP][DELETE DIR] END success: ${absoluteRemoteDir} summary(files=${stats.files}, dirs=${stats.dirs})`);
+        LoggerService.log(`END success: ${absoluteRemoteDir} summary(files=${stats.files}, dirs=${stats.dirs})`, 'FtpRemoteService', 'info');
       } catch (err: any) {
-        LoggerService.log(`[FTP][DELETE DIR] END fail: ${absoluteRemoteDir} error=${err.message} summary(files=${stats.files}, dirs=${stats.dirs})`);
+        LoggerService.log(`END fail: ${absoluteRemoteDir} error=${err.message} summary(files=${stats.files}, dirs=${stats.dirs})`, 'FtpRemoteService', 'error');
         throw err;
       }
     });
@@ -1134,14 +1132,14 @@ export class FtpRemoteService implements RemoteService {
         throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
       }
 
-      LoggerService.log(`[FTP] Renaming: ${oldRemotePath} -> ${newRemotePath}`);
+      LoggerService.log(`Renaming: ${oldRemotePath} -> ${newRemotePath}`, 'FtpRemoteService', 'info');
 
       try {
         await session.rename(oldRemotePath, newRemotePath);
         
-        LoggerService.log(`[FTP] Rename successful`);
+        LoggerService.log(`Rename successful`, 'FtpRemoteService', 'info');
       } catch (err: any) {
-        LoggerService.log(`[FTP][ERROR] rename failed: ${err.message}`);
+        LoggerService.log(`rename failed: ${err.message}`, 'FtpRemoteService', 'error');
         throw err;
       }
     });
@@ -1228,7 +1226,7 @@ export class FtpRemoteService implements RemoteService {
         }
       };
 
-      LoggerService.log(`[FTP][COPY] START type=${isDirectory ? 'directory' : 'file'} ${source} -> ${target}`);
+      LoggerService.log(`START type=${isDirectory ? 'directory' : 'file'} ${source} -> ${target}`, 'FtpRemoteService', 'info');
 
       try {
         await fs.promises.mkdir(tmpRoot, { recursive: true });
@@ -1238,7 +1236,7 @@ export class FtpRemoteService implements RemoteService {
         } else {
           await copyFileInternal(source, target);
         }
-        LoggerService.log(`[FTP][COPY] END success: ${source} -> ${target}`);
+        LoggerService.log(`END success: ${source} -> ${target}`, 'FtpRemoteService', 'info');
         activeStatusMessage?.dispose();
         activeStatusMessage = undefined;
         vscode.window.setStatusBarMessage(
@@ -1246,7 +1244,7 @@ export class FtpRemoteService implements RemoteService {
           5000
         );
       } catch (err: any) {
-        LoggerService.log(`[FTP][COPY] END fail: ${source} -> ${target} error=${err.message || String(err)}`);
+        LoggerService.log(`END fail: ${source} -> ${target} error=${err.message || String(err)}`, 'FtpRemoteService', 'error');
         activeStatusMessage?.dispose();
         activeStatusMessage = undefined;
         vscode.window.setStatusBarMessage(
@@ -1294,7 +1292,7 @@ export class FtpRemoteService implements RemoteService {
               throw new Error('FTP session not initialized or connection closed');
             }
 
-            LoggerService.log(`[FTP] Downloading for edit: ${ftpPath} -> ${tmpFile}`);
+            LoggerService.log(`Downloading for edit: ${ftpPath} -> ${tmpFile}`);
             await activeSession.downloadTo(tmpFile, ftpPath);
           },
           uploadFromTemp: async (tmpFile) => {
@@ -1303,17 +1301,17 @@ export class FtpRemoteService implements RemoteService {
               throw new Error('Connection lost');
             }
 
-            LoggerService.log(`[FTP] Uploading changes: ${tmpFile} -> ${ftpPath}`);
+            LoggerService.log(`Uploading changes: ${tmpFile} -> ${ftpPath}`);
             await session2.uploadFrom(tmpFile, ftpPath);
           },
           logCleanupError: (cleanupError) => {
-            LoggerService.log(`[FTP] Temp file cleanup error: ${String(cleanupError)}`);
+            LoggerService.log(`Temp file cleanup error: ${String(cleanupError)}`);
           },
         });
 
       } catch (e: any) {
         const msg = e.message || String(e);
-        LoggerService.log(`[FTP][ERROR] editFile: ${msg}`);
+        LoggerService.log(`editFile: ${msg}`, 'FtpRemoteService', 'error');
         vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: msg }));
       } finally {
         if (treeDataProvider?.treeLocker) {
@@ -1340,7 +1338,7 @@ export class FtpRemoteService implements RemoteService {
         const oldPath = item.ftpPath || item.sshPath || (item.resourceUri ? item.resourceUri.path : null);
         
         if (!oldPath || oldPath === '.') {
-          LoggerService.log(`[FTP][moveItems] Skipping item (invalid path): ${item.label || 'unknown'}`);
+          LoggerService.log(`Skipping item (invalid path): ${item.label || 'unknown'}`, 'FtpRemoteService', 'warning');
           continue;
         }
 
@@ -1349,13 +1347,13 @@ export class FtpRemoteService implements RemoteService {
 
         if (oldPath === newPath) continue;
 
-        LoggerService.log(`[FTP][moveItems] Moving: ${oldPath} -> ${newPath}`);
+        LoggerService.log(`Moving: ${oldPath} -> ${newPath}`, 'FtpRemoteService', 'info');
 
         try {
           await session.rename(oldPath, newPath);
         } catch (err: any) {
           hadError = true;
-          LoggerService.log(`[FTP][moveItems][ERROR] ${err.message}`);
+          LoggerService.log(`${err.message}`, 'FtpRemoteService', 'error');
           vscode.window.showErrorMessage(LangService.t('moveFailed', { error: err.message }));
         }
       }
@@ -1402,9 +1400,9 @@ export class FtpRemoteService implements RemoteService {
     }
     stack.add(normalizedTarget);
 
-    LoggerService.log(`[FTP][DELETE DIR][ENTER] ${targetPath}`);
+    LoggerService.log(`${targetPath}`, 'FtpRemoteService', 'info');
     const list = await withOpTimeout(session.list(targetPath), 5000, `list(${targetPath})`);
-    LoggerService.log(`[FTP][DELETE DIR][LIST] ${targetPath} -> ${list.length} items`);
+    LoggerService.log(`${targetPath} -> ${list.length} items`, 'FtpRemoteService', 'info');
     const filePathsToDelete: string[] = [];
     const directoryEntries: Array<{ item: any; fullPath: string; normalizedFull: string; rootOccurences: number; dirId: string }> = [];
 
@@ -1428,7 +1426,7 @@ export class FtpRemoteService implements RemoteService {
     if (filePathsToDelete.length > 0) {
       const queue = [...filePathsToDelete];
       const workerCount = Math.min(ConfigService.getConcurrencyLimit('ftpDeleteFileConcurrency', 4), queue.length);
-      LoggerService.log(`[FTP][DELETE DIR][FILE QUEUE] ${targetPath} -> ${queue.length} files, workers=${workerCount}`);
+      LoggerService.log(`${targetPath} -> ${queue.length} files, workers=${workerCount}`, 'FtpRemoteService', 'info');
 
       const workers: FtpClient[] = await Promise.all(
         Array(workerCount)
@@ -1444,7 +1442,7 @@ export class FtpRemoteService implements RemoteService {
               continue;
             }
 
-            LoggerService.log(`[FTP][DELETE DIR][FILE] remove: ${fullPath}`);
+            LoggerService.log(`remove: ${fullPath}`, 'FtpRemoteService', 'info');
             await withOpTimeout(worker.remove(fullPath), 5000, `remove(${fullPath})`);
             if (stats) {
               stats.files++;
@@ -1475,7 +1473,7 @@ export class FtpRemoteService implements RemoteService {
             stats.files++;
           }
           onProgress?.('link', fullPath);
-          LoggerService.log(`[FTP][DELETE DIR][LOOP] removed as file/link: ${fullPath}`);
+          LoggerService.log(`removed as file/link: ${fullPath}`, 'FtpRemoteService', 'info');
         } catch {
         }
         if (!removed) {
@@ -1486,7 +1484,7 @@ export class FtpRemoteService implements RemoteService {
               stats.dirs++;
             }
             onProgress?.('dir', fullPath);
-            LoggerService.log(`[FTP][DELETE DIR][LOOP] removed as directory: ${fullPath}`);
+            LoggerService.log(`removed as directory: ${fullPath}`, 'FtpRemoteService', 'info');
           } catch {
           }
         }
@@ -1515,7 +1513,7 @@ export class FtpRemoteService implements RemoteService {
       const isLoopByTail = hasRepeatingTail;
 
       if (isLoopByRoot || isLoopById || isLoopByTail) {
-        LoggerService.log(`[FTP][DELETE DIR][LOOP] detected at ${normalizedFull} reason=${isLoopByRoot ? 'root-repeat' : isLoopById ? `id-repeat:${dirId}` : 'tail-repeat'}`);
+        LoggerService.log(`detected loop at ${normalizedFull} reason=${isLoopByRoot ? 'root-repeat' : isLoopById ? `id-repeat:${dirId}` : 'tail-repeat'}`, 'FtpRemoteService', 'warning');
         const removed = await safeRemoveLoopNode();
         if (!removed) {
           throw new Error(`Loop-like path detected and cannot remove safely: ${fullPath}`);
@@ -1535,7 +1533,7 @@ export class FtpRemoteService implements RemoteService {
       }
     }
 
-    LoggerService.log(`[FTP][DELETE DIR][RMDIR] remove: ${targetPath}`);
+    LoggerService.log(`remove: ${targetPath}`, 'FtpRemoteService', 'info');
     await withOpTimeout(session.removeDir(targetPath), 5000, `removeDir(${targetPath})`);
     if (stats) {
       stats.dirs++;

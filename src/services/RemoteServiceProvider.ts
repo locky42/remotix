@@ -9,17 +9,17 @@ export class RemoteServiceProvider {
   async getRemoteService(label: string): Promise<any> {
     let remoteService = this.remoteServiceCache[label];
     if (!remoteService) {
-      LoggerService.log(`[RemoteServiceProvider][DEBUG] Creating new remoteService for ${label}`);
+      LoggerService.log(`Creating new remoteService for ${label}`, 'RemoteServiceProvider', 'info');
       const connectionManager = Container.get('connectionManager') as ConnectionManager;
       const connection = connectionManager.getByLabel?.(label);
       if (!connection) {
-        LoggerService.log(`[RemoteServiceProvider][DEBUG] Connection not found for label: ${label}`);
+        LoggerService.log(`Connection not found for label: ${label}`, 'RemoteServiceProvider', 'info');
         return null;
       }
       remoteService = createRemoteService(connection);
       this.remoteServiceCache[label] = remoteService;
     } else {
-      LoggerService.log(`[RemoteServiceProvider][DEBUG] Using cached remoteService for ${label}`);
+      LoggerService.log(`Using cached remoteService for ${label}`, 'RemoteServiceProvider', 'info');
     }
     return remoteService;
   }

@@ -46,7 +46,7 @@ export class SessionProvider {
 
       return false;
     } catch (e: any) {
-      LoggerService.log(`[SessionProvider] Connection dead for ${key}: ${e.message || e}`);
+      LoggerService.log(`Connection dead for ${key}: ${e.message || e}`, 'SessionProvider', 'error');
       return false;
     }
   }
@@ -59,7 +59,7 @@ export class SessionProvider {
       if (isAlive) {
         return session as T;
       }
-      LoggerService.log(`[SessionProvider] Session ${key} is dead. Cleaning up...`);
+      LoggerService.log(`Session ${key} is dead. Cleaning up...`, 'SessionProvider', 'info');
     }
     
     this.closeSession(key);
@@ -68,7 +68,7 @@ export class SessionProvider {
       throw new Error(`No active session for ${key} and no service provided.`);
     }
 
-    LoggerService.log(`[SessionProvider] Establishing new connection for: ${key}`);
+    LoggerService.log(`Establishing new connection for: ${key}`, 'SessionProvider', 'info');
     const newClient = await service.connect(key); 
     
     if (!newClient) {
