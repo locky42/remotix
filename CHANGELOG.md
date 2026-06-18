@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.3] — 2026-06-19
+
+### Added
+* **Double-Click Connection**: Servers now open strictly via a quick double-click. Single clicks will no longer trigger accidental connections.
+* **Logging Configuration**: Added an option to choose the log level (errors only or full debug) to reduce system overhead.
+* **Password Field for SSH Key**: The password field remains accessible and usable even when the SSH key file connection mode is selected.
+
+### Changed
+* **Colored Logs**: Severity tags in the log terminal are now automatically highlighted according to your active VS Code theme colors.
+
+### Fixed
+* **Connection Password Saving**: Fixed an issue where a saved connection password was unavailable or not applied until the extension or app was restarted.
+* **Suppressed Auto-Focus**: The Output channel panel no longer forcefully pops up on the screen during background extension operations.
+* **Hidden SSH Passwords**: Passwords are no longer exposed as open arguments in `sshpass` processes, remaining safely isolated within the environment.
+* **Minor UI Fixes**: Polished visual elements and minor interface alignments across the extension panel.
+
 ## [1.3.2] - 2026-05-02
 
 ### Added

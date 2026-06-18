@@ -15,12 +15,26 @@ Control your infrastructure, edit files, and manage remote systems without leavi
 
 ---
 
-## 🔥 What's New in v1.3.2
+## 🔥 What's New in v1.3.3
+
+- **🖱️ Double-Click Connection**: Servers now open strictly via a quick double-click. Single clicks will no longer trigger accidental connections.
+- **⚙️ Logging Levels**: Added an option to choose the log level (errors only or full debug mode) to significantly reduce system overhead.
+- **🤫 Silent Operations**: The extension log panel no longer forcefully auto-focuses or pops up on the screen during background processes.
+- **🔐 Protected SSH Passwords**: Credentials are no longer exposed as open arguments in `sshpass` processes, remaining safely isolated within the environment.
+- **🔑 Flexible Password Fields**: The password field now remains accessible and editable even when the SSH key file mode is selected.
+- **🎨 Colorized Logs**: Severity tags in the output channel are now automatically highlighted according to your active VS Code theme.
+- **🔧 Reliable Password Saving**: Fixed an issue where edited connection passwords were not applied until the extension or app was restarted.
+- **🖌️ Minor UI Fixes**: Polished visual elements and minor interface alignments across the extension panel.
+
+<details>
+<summary>Previous: v1.3.2</summary>
 
 - **📦 Streamed Archive Download**: Download SSH folders as a `tar.gz` archive streamed directly from the remote server.
 - **🕒 Rich Tree Labels**: Remote tree items now show last modified date, and files also display human-readable sizes.
 - **💾 Reliable Connection Editing**: Changes made in the connection editor are now saved correctly.
 - **🚨 Smarter Archive Handling**: Non-fatal tar warnings no longer abort archive downloads.
+
+</details>
 
 <details>
 <summary>Previous: v1.3.1</summary>
@@ -51,7 +65,21 @@ Control your infrastructure, edit files, and manage remote systems without leavi
 
 ## 🔒 Security
 
-Remotix has undergone a major security overhaul in **v1.3.0** to ensure your credentials are handled with professional-grade protection. We have fully migrated to the **VS Code Secret Storage API**.
+Remotix has undergone a major security overhaul starting from **v1.3.0** and received further hardening in **v1.3.3** to ensure your credentials are handled with professional-grade protection. We have fully migrated to the **VS Code Secret Storage API** and isolated password transmission during active connections.
+
+### 🛡️ OS-Level Encryption & Safe Transmission
+Your passwords are never stored in plain-text config files. Instead, they are encrypted and kept in your system's native secure vault:
+- **macOS:** Keychain Access
+- **Windows:** Credential Manager
+- **Linux:** Secret Service (via libsecret)
+
+Furthermore, when establishing connections via third-party utilities (like `sshpass`), Remotix completely isolates passwords within protected environment variables, ensuring they never leak as plain-text arguments in running system processes.
+
+### 🔄 Automatic Migration
+The transition is seamless. Upon updating, Remotix will **automatically move** your existing passwords to the secure storage the first time you connect to each server. No manual re-entry or reconfiguration is required.
+
+### 🔐 Controlled Access
+Only the extension itself can securely retrieve these secrets when establishing a connection, and you can securely view or copy your stored passwords directly from the UI if needed.
 
 ### 🛡️ OS-Level Encryption
 Your passwords are no longer stored in plain-text config files. Instead, they are encrypted and kept in your system's native secure vault:
@@ -125,6 +153,7 @@ Alternatively:
 | **Language** | Choose between `auto`, `English`, or `Ukrainian` UI. | `auto` |
 | **FTP Concurrency** | Max parallel FTP file workers for faster transfers. | `3` |
 | **SSH Concurrency** | Max parallel SSH file workers per folder. | `3` |
+| **Log Level** | Select output verbosity. Choose `error` for quiet operations or `debug` for detailed troubleshooting logs. | `error` |
 
 > [!TIP]
 > **Performance:** If you are working with a high-speed connection and many small files, try increasing the **Concurrency** values to `5` or `10` to significantly speed up uploads and downloads.
