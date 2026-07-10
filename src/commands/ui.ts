@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { ConnectionStatus } from '../types';
 import { Container } from '../services/Container';
 import { LangService } from '../services/LangService';
 import { ConfigService } from '../services/ConfigService';
@@ -59,7 +60,7 @@ export function registerUiCommands() {
     context.subscriptions.push(vscode.commands.registerCommand('remotix.refresh', async (item?: vscode.TreeItem) => {
         if (item) {
             const label = (item as any).connectionLabel || (typeof item.label === 'string' ? item.label : undefined);
-            if (label && (((item as any).contextValue === 'connection') || ((item as any).contextValue === 'connection-active'))) {
+            if (label && (((item as any).contextValue === ConnectionStatus.Cold) || ((item as any).contextValue === ConnectionStatus.Active))) {
                 SessionProvider.clearManualClose(String(label));
             }
             treeDataProvider.refresh(item);
@@ -75,40 +76,42 @@ export function registerUiCommands() {
 
     const lastClickTimes = new Map<string, number>();
   
-  const doubleClickCommand = vscode.commands.registerCommand(
-    'remotix.expandConnectionOnDoubleClick', 
-    async (item: vscode.TreeItem) => {
-      const label = (item as any).connectionLabel || String(item.label);
-      
-      if (SessionProvider.hasSession(label)) {
-        return;
-      }
-
-      const now = Date.now();
-      const lastClick = lastClickTimes.get(label) || 0;
-      lastClickTimes.set(label, now);
-
-      if (now - lastClick < 400) {
-        lastClickTimes.delete(label);
+    const doubleClickCommand = vscode.commands.registerCommand(
+      'remotix.expandConnectionOnDoubleClick', 
+      async (item: vscode.TreeItem) => {
+        const label = (item as any).connectionLabel || String(item.label);
         
-        (treeDataProvider as any).allowExpandOnce = label;
-        const treeView = Container.get('treeView') as vscode.TreeView<vscode.TreeItem>;
-        if (treeView) {
-          try {
-            await treeView.reveal(item, { 
-              select: true, 
-              focus: true, 
-              expand: true 
-            });
-          } catch (err) {
-            treeDataProvider.refresh(item);
-          }
+        if (SessionProvider.hasSession(label)) {
+          return;
         }
 
-        (treeDataProvider as any).allowExpandOnce = undefined;
-      }
-    }
-  );
+        const now = Date.now();
+        const lastClick = lastClickTimes.get(label) || 0;
+        lastClickTimes.set(label, now);
 
-  context.subscriptions.push(doubleClickCommand);
+        if (now - lastClick < 400) {
+          lastClickTimes.delete(label);
+
+          (treeDataProvider as any).allowExpandOnce = label;
+          const treeView = Container.get('treeView') as vscode.TreeView<vscode.TreeItem>;
+          if (treeView) {
+            item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            treeDataProvider.refresh(item);
+            try {
+              await treeView.reveal(item, { 
+                select: true, 
+                focus: true, 
+                expand: true 
+              });
+            } catch (err) {
+              treeDataProvider.refresh(item);
+            }
+          }
+
+          (treeDataProvider as any).allowExpandOnce = undefined;
+        }
+      }
+    );
+
+    context.subscriptions.push(doubleClickCommand);
 }

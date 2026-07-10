@@ -47,3 +47,8 @@ export interface ConnectionItem {
 export interface RemotixConfig {
   connections: ConnectionItem[];
 }
+
+export enum ConnectionStatus {
+  Active = 'connection-active',
+  Cold = 'connection'
+}

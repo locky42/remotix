@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { ConnectionItem } from '../types';
 import { TreeViewLocker } from './TreeViewLocker';
 import { Container } from '../services/Container';
+import { ConnectionItem, ConnectionStatus } from '../types';
 import { SessionProvider } from '../services/SessionProvider';
 import { TreeItemFactory } from '../factories/TreeItemFactory';
 import { DragAndDropController } from './DragAndDropController';
@@ -84,9 +84,9 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
       (treeItem as any).connectionLabel = element.connectionLabel;
     }
 
-    if (element.contextValue === 'connection' || element.contextValue === 'connection-active') {
+    if (element.contextValue === ConnectionStatus.Cold || element.contextValue === ConnectionStatus.Active) {
       const label = (element as any).connectionLabel || String(element.label);
-      treeItem.contextValue = SessionProvider.hasSession(label) ? 'connection-active' : 'connection';
+      treeItem.contextValue = SessionProvider.hasSession(label) ? ConnectionStatus.Active : ConnectionStatus.Cold;
       if (this.suppressConnectionExpand) {
         treeItem.collapsibleState = vscode.TreeItemCollapsibleState.None;
         // Disable command click during drag-reorder
@@ -166,16 +166,16 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
     }
   }
 
-    refresh(element?: vscode.TreeItem) {
-      if (element) {
-        const elementAny = element as any;
-        if (elementAny.children) {
-          delete elementAny.children;
-        }
+  refresh(element?: vscode.TreeItem) {
+    if (element) {
+      const elementAny = element as any;
+      if (elementAny.children) {
+        delete elementAny.children;
       }
-      
-      this._onDidChangeTreeData.fire(element);
     }
+    
+    this._onDidChangeTreeData.fire(element);
+  }
 
   async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
     if ((element as any)?.children) {
@@ -223,17 +223,24 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
       LoggerService.log('getChildren EXIT (root)', 'TreeDataProvider', 'info');
       return [addItem, ...connectionItems];
     }
-    if (element && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active' || (element as any).contextValue === 'ssh-folder' || (element as any).contextValue === 'ftp-folder')) {
+    if (element && ((element as any).contextValue === ConnectionStatus.Cold || (element as any).contextValue === ConnectionStatus.Active || (element as any).contextValue === 'ssh-folder' || (element as any).contextValue === 'ftp-folder')) {
       const label = (element as any).connectionLabel || element.label;
       const hasSession = SessionProvider.hasSession(String(label));
       const isExpandingNow = (this as any).allowExpandOnce === label;
 
-      if (!hasSession && !isExpandingNow && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active')) {
+      if (!hasSession && !isExpandingNow && ((element as any).contextValue === ConnectionStatus.Cold || (element as any).contextValue === ConnectionStatus.Active)) {
         LoggerService.log('Single click connection expand suppressed', 'TreeDataProvider', 'info');
-        return [];
+        let  fakeItem = null;
+        if (!hasSession) {
+          fakeItem = new vscode.TreeItem('💀 Disconnected');
+        } else {
+          fakeItem = new vscode.TreeItem('🔄 Loading...');
+        }
+        fakeItem.contextValue = 'loading-stub';
+        return [fakeItem];
       }
 
-      if (this.suppressConnectionExpand && ((element as any).contextValue === 'connection' || (element as any).contextValue === 'connection-active')) {
+      if (this.suppressConnectionExpand && ((element as any).contextValue === ConnectionStatus.Cold || (element as any).contextValue === ConnectionStatus.Active)) {
         LoggerService.log('Connection expand suppressed during reorder drag', 'TreeDataProvider', 'info');
         return [];
       }
@@ -260,17 +267,16 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
     
       const provider = Container.get('remoteServiceProvider') as RemoteServiceProvider;
       const remoteService = await provider.getRemoteService(label);
+
       if (!remoteService) {
-        return [];
-      } else {
-        LoggerService.log(`Using cached remoteService for ${label}`, 'TreeDataProvider', 'info');
+        LoggerService.log('No remoteService found, returning stub', 'TreeDataProvider', 'info');
+        const fakeItem = new vscode.TreeItem('🔄 Loading...');
+        fakeItem.contextValue = 'loading-stub';
+        return [fakeItem];
       }
-      LoggerService.log(`remoteService: ${remoteService ? remoteService.constructor.name : 'undefined'}`, 'TreeDataProvider', 'info');
-      if (!remoteService) {
-        LoggerService.log('No remoteService, returning []', 'TreeDataProvider', 'info');
-        LoggerService.log('getChildren EXIT (no remoteService)', 'TreeDataProvider', 'info');
-        return [];
-      }
+      
+      LoggerService.log(`Using cached remoteService for ${label}`, 'TreeDataProvider', 'info');
+      LoggerService.log(`remoteService: ${remoteService.constructor.name}`, 'TreeDataProvider', 'info');
       const path = (element as any).sshPath || (element as any).ftpPath || '.';
       LoggerService.log(`path: ${path}`, 'TreeDataProvider', 'info');
       if (typeof remoteService.listDirectory === 'function') {
@@ -298,7 +304,7 @@ export class TreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem
   }
 
   getParent(element: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem> {
-    if (element.contextValue === 'connection' || element.contextValue === 'connection-active') {
+    if (element.contextValue === ConnectionStatus.Cold || element.contextValue === ConnectionStatus.Active) {
       return undefined;
     }
 

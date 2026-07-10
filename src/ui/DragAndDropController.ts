@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { ConnectionStatus } from '../types';
 import { Container } from '../services/Container';
 import { ConnectionManager } from '../services/ConnectionManager';
 import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
@@ -11,7 +12,6 @@ export class DragAndDropController implements vscode.TreeDragAndDropController<v
   constructor(private connectionManager: ConnectionManager, private fireChange: () => void, private treeDataProvider: any) {}
 
   handleDrag(source: vscode.TreeItem[], dataTransfer: vscode.DataTransfer): void {
-    const isConnectionDrag = source.some(item => ['connection', 'connection-active'].includes(String((item as any).contextValue || '')));
     // Don't set reorder mode here - only set it when needed during drop
     // This prevents flag getting stuck if drag is canceled
     this.dragOverTarget = null; // Reset on new drag
@@ -27,7 +27,7 @@ export class DragAndDropController implements vscode.TreeDragAndDropController<v
     const draggedItems = DragAndDropController.parseDragTransfer(transfer);
     if (!draggedItems.length) return;
 
-    if (target && ['connection', 'connection-active'].includes(String((target as any).contextValue || ''))) {
+    if (target && Object.values(ConnectionStatus).includes((target as any).contextValue as ConnectionStatus)) {
       const targetLabel = String((target as any).connectionLabel || target.label || '');
       const draggedLabels = draggedItems
         .map(i => String(i.connectionLabel || i.label || ''))
@@ -49,8 +49,10 @@ export class DragAndDropController implements vscode.TreeDragAndDropController<v
     const draggedItems = DragAndDropController.parseDragTransfer(transfer);
     if (!draggedItems.length) return;
 
-    if (draggedItems.length && ['connection', 'connection-active'].includes(String(draggedItems[0].contextValue || ''))) {
-      if (!target || !['connection', 'connection-active'].includes(String((target as any).contextValue || ''))) return;
+    const isConn = (val?: string) => Object.values(ConnectionStatus).includes(val as ConnectionStatus);
+
+    if (draggedItems.length && isConn(draggedItems[0].contextValue)) {
+      if (!target || !isConn((target as any).contextValue)) return;
       const targetLabel = String((target as any).connectionLabel || target.label || '');
       const draggedLabels = draggedItems
         .map(i => String(i.connectionLabel || i.label || ''))
@@ -122,7 +124,7 @@ export class DragAndDropController implements vscode.TreeDragAndDropController<v
   }
 
   private static serializeDragItems(source: vscode.TreeItem[]): string {
-    const items = source.filter(item => ['connection', 'connection-active', 'ssh-file', 'ssh-folder', 'ftp-file', 'ftp-folder'].includes((item as any).contextValue));
+    const items = source.filter(item => [ConnectionStatus.Cold, ConnectionStatus.Active, 'ssh-file', 'ssh-folder', 'ftp-file', 'ftp-folder'].includes((item as any).contextValue));
     return JSON.stringify(items.map(i => ({
       contextValue: (i as any).contextValue,
       connectionLabel: (i as any).connectionLabel,

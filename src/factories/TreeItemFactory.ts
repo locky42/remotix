@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { ConnectionItem } from '../types';
 import { LangService } from '../services/LangService';
+import { ConnectionItem, ConnectionStatus } from '../types';
 import { SessionProvider } from '../services/SessionProvider';
 
 export class TreeItemFactory {
@@ -25,7 +25,7 @@ export class TreeItemFactory {
     item.description = `${connection.type.toUpperCase()} • ${desc}`;
     item.tooltip = connection.label;
     item.iconPath = connection.type === 'ssh' ? new vscode.ThemeIcon('terminal') : new vscode.ThemeIcon('cloud');
-    (item as any).contextValue = hasActiveSession ? 'connection-active' : 'connection';
+    (item as any).contextValue = hasActiveSession ? ConnectionStatus.Active : ConnectionStatus.Cold;
     if (connection.type === 'ssh') {
       (item as any).sshPath = '.';
     } else {
