@@ -205,7 +205,7 @@ export function registerFileFolderCommands() {
     if (!service) {
       return;
     }
-    await service.deleteFileWithDialogs?.(item);
+    await service.deleteWithDialogs?.(item);
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('remotix.copyItem', async (item: any) => {

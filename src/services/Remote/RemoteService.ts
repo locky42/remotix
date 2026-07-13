@@ -21,9 +21,7 @@ export interface RemoteService {
   createFolderWithDialogs?(item: any): Promise<void>;
   createFolder(remoteDir: string): Promise<void>;
 
-  deleteFileWithDialogs?(item: any): Promise<void>;
-  deleteFile(remotePath: string): Promise<void>;
-  deleteDir(remoteDir: string): Promise<void>;
+  deleteWithDialogs(item: any): Promise<void>;
 
   renameWithDialogs?(item: any): Promise<void>;
   rename(oldRemotePath: string, newRemotePath: string): Promise<void>;

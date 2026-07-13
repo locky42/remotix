@@ -1049,13 +1049,14 @@ export class SshRemoteService implements RemoteService {
     });
   }
 
-  async deleteFileWithDialogs(item: any): Promise<void> {
+  async deleteWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
     const sshPath = RemoteCrudDialogHelper.getRemotePath(item);
     if (!sshPath) {
       vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
       return;
     }
+
     const isDir = RemoteCrudDialogHelper.isDirectoryItem(item);
     const confirm = await vscode.window.showWarningMessage(
       LangService.t(isDir ? 'confirmDeleteFolder' : 'confirmDeleteFile', { path: sshPath }),
@@ -1063,126 +1064,48 @@ export class SshRemoteService implements RemoteService {
       LangService.t('delete')
     );
     if (confirm !== LangService.t('delete')) return;
-    LoggerService.log(`DELETE START type=${isDir ? 'directory' : 'file'} path=${sshPath}`, 'SshRemoteService', 'info');
-    treeDataProvider?.treeLocker?.lock(LangService.t('deleteInProgress'), this.connection.label);
-    try {
-      if (isDir) {
-        await this.deleteDir(sshPath);
-        vscode.window.showInformationMessage(LangService.t('folderDeleted', { path: sshPath }));
-      } else {
-        await this.deleteFile(sshPath);
-        vscode.window.showInformationMessage(LangService.t('fileDeleted', { path: sshPath }));
+
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: LangService.t('deleteInProgress') + '...',
+      cancellable: false
+    }, async () => {
+      LoggerService.log(`DELETE START path=${sshPath}`, 'SshRemoteService', 'info');
+      treeDataProvider?.treeLocker?.lock(LangService.t('deleteInProgress'), this.connection.label);
+      
+      try {
+        await this.deleteRemoteItem(sshPath);
+        vscode.window.showInformationMessage(LangService.t(isDir ? 'folderDeleted' : 'fileDeleted', { path: sshPath }));
+        
+        RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, RemotePathHelper.getParentRemotePath(sshPath), 'ssh');
+        LoggerService.log(`DELETE END success path=${sshPath}`, 'SshRemoteService', 'info');
+      } catch (e: any) {
+        LoggerService.log(`DELETE END fail path=${sshPath} error=${e.message}`, 'SshRemoteService', 'error');
+        vscode.window.showErrorMessage(LangService.t('deleteFailed', { error: e.message }));
+      } finally {
+        treeDataProvider?.treeLocker?.unlock();
       }
-      RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, RemotePathHelper.getParentRemotePath(sshPath), 'ssh');
-      LoggerService.log(`DELETE END success type=${isDir ? 'directory' : 'file'} path=${sshPath}`, 'SshRemoteService', 'info');
-    } catch (e: any) {
-      LoggerService.log(`DELETE END fail type=${isDir ? 'directory' : 'file'} path=${sshPath} error=${e instanceof Error ? e.message : String(e)}`, 'SshRemoteService', 'error');
-      vscode.window.showErrorMessage(LangService.t('deleteFailed', { error: (e instanceof Error ? e.message : String(e)) }));
-    } finally {
-      treeDataProvider?.treeLocker?.unlock();
-    }
-  }
-
-  async deleteFile(remotePath: string): Promise<void> {
-    const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
-
-    return await new Promise<void>((resolve, reject) => {
-      session.sftp((err, sftp) => {
-        if (err) {
-          LoggerService.log(`deleteFile SFTP Error: ${err.message}`, 'SshRemoteService', 'error');
-          return reject(err);
-        }
-
-        LoggerService.log(`DELETE FILE START: ${remotePath}`, 'SshRemoteService', 'info');
-
-        sftp.unlink(remotePath, (err2: any) => {
-          if (err2) {
-            LoggerService.log(`DELETE FILE END fail: ${remotePath} error=${err2.message}`, 'SshRemoteService', 'error');
-            sftp.end();
-            return reject(err2);
-          }
-          
-          LoggerService.log(`DELETE FILE END success: ${remotePath}`, 'SshRemoteService', 'info');
-          sftp.end();
-          resolve();
-        });
-      });
     });
   }
 
-  async deleteDir(remoteDir: string): Promise<void> {
-    LoggerService.log(`DELETE DIR START: ${remoteDir}`, 'SshRemoteService', 'info');
-    
-    const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
-    
-    if (!session || (session as any).closed) {
-      throw new Error('SSH session is closed or not available');
-    }
+  async deleteRemoteItem(remotePath: string): Promise<void> {
+    const session = await SessionProvider.getSession<any>(this.connection.label, this);
+    const escapedPath = `"${remotePath.replace(/"/g, '\\"')}"`;
 
     return new Promise<void>((resolve, reject) => {
-      session.sftp((err, sftp) => {
-        if (err) {
-          LoggerService.log(`SFTP error: ${err.message}`, 'SshRemoteService', 'error');
-          return reject(err);
-        }
+      session.exec(`rm -rf ${escapedPath}`, (err: Error | undefined, stream: any) => {
+        if (err) return reject(err);
 
-        const rmRecursive = (dirPath: string, done: (err?: Error | null) => void) => {
-          sftp.readdir(dirPath, (err2, list) => {
-            if (err2) {
-              LoggerService.log(`readdir fail: ${dirPath} error=${err2.message}`, 'SshRemoteService', 'error');
-              return done(err2);
-            }
+        stream.on('data', () => {});
+        stream.stderr.on('data', (data: Buffer) => {
+          LoggerService.log(`RM ERROR: ${data.toString()}`, 'SshRemoteService', 'error');
+        });
 
-            let i = 0;
-            const next = (): void => {
-              if (i >= list.length) {
-                sftp.rmdir(dirPath, (errRm) => {
-                  if (errRm) {
-                    LoggerService.log(`rmdir fail: ${dirPath} error=${errRm.message}`, 'SshRemoteService', 'error');
-                  }
-                  return done(errRm);
-                });
-                return;
-              }
-
-              const entry = list[i++];
-              
-              if (entry.filename === '.' || entry.filename === '..') {
-                return next();
-              }
-
-              const entryPath = dirPath.endsWith('/') ? dirPath + entry.filename : dirPath + '/' + entry.filename;
-              
-              const isDirectory = entry.attrs.isDirectory();
-
-              if (isDirectory) {
-                rmRecursive(entryPath, (err3) => {
-                  if (err3) return done(err3);
-                  next();
-                });
-              } else {
-                sftp.unlink(entryPath, (err3) => {
-                  if (err3) {
-                    LoggerService.log(`unlink fail: ${entryPath} error=${err3.message}`, 'SshRemoteService', 'error');
-                    return done(err3);
-                  }
-                  next();
-                });
-              }
-            };
-
-            next();
-          });
-        };
-
-        rmRecursive(remoteDir, (finalErr) => {
-          sftp.end();
-          if (finalErr) {
-            LoggerService.log(`DELETE DIR END fail: ${remoteDir} error=${finalErr.message}`, 'SshRemoteService', 'error');
-            reject(finalErr);
-          } else {
-            LoggerService.log(`DELETE DIR END success: ${remoteDir}`, 'SshRemoteService', 'info');
+        stream.on('close', (code: number | null) => {
+          if (code === 0) {
             resolve();
+          } else {
+            reject(new Error(`Exit code ${code}`));
           }
         });
       });

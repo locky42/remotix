@@ -501,8 +501,9 @@ export class FtpRemoteService implements RemoteService {
             });
 
             if (isDirectory) {
-                await this.downloadDir(item, localTarget);
+                await this.downloadDir(item, localTarget, progress, token);
             } else {
+                progress.report({ message: LangService.t('downloading') + `: ${require('path').basename(selectedPath)}` });
                 await this.download(item, localTarget);
             }
         });
@@ -544,7 +545,7 @@ export class FtpRemoteService implements RemoteService {
     }
   }
 
-  async downloadDir(item: any, localTarget: string): Promise<void> {
+  async downloadDir(item: any, localTarget: string, progress?: any, token?: any): Promise<void> {
     return this._mutex.acquire(async () => {
       const remoteDir = item?.ftpPath || item.item?.name;
       const pathMod = require('path');
@@ -559,8 +560,14 @@ export class FtpRemoteService implements RemoteService {
       LoggerService.log(`START: ${remoteDir} -> ${localDest}`, 'FtpRemoteService', 'info');
       try {
         const filesToDownload: Array<{ remotePath: string; localPath: string }> = [];
+        
         const collectFiles = async (rDir: string, lDir: string): Promise<void> => {
           await fs.promises.mkdir(lDir, { recursive: true });
+          
+          if (progress) {
+            progress.report({ message: `Сканування: ${pathMod.basename(rDir)}` });
+          }
+
           const list = await session.list(rDir);
           const entries = list.filter((entry: any) => entry.name !== '.' && entry.name !== '..');
 
@@ -581,6 +588,7 @@ export class FtpRemoteService implements RemoteService {
         const CONCURRENCY_LIMIT = ConfigService.getConcurrencyLimit('ftpDownloadConcurrency', 3);
         const queue = [...filesToDownload];
         let downloadedCount = 0;
+        const totalFiles = filesToDownload.length;
 
         const workers: FtpClient[] = await Promise.all(
           Array(Math.min(CONCURRENCY_LIMIT, queue.length))
@@ -590,7 +598,7 @@ export class FtpRemoteService implements RemoteService {
 
         try {
           const workerRun = async (worker: FtpClient): Promise<void> => {
-            while (queue.length > 0) {
+            while (queue.length > 0 && !(token?.isCancellationRequested)) {
               const job = queue.shift();
               if (!job) {
                 continue;
@@ -598,9 +606,14 @@ export class FtpRemoteService implements RemoteService {
               LoggerService.log(`START: ${job.remotePath}`, 'FtpRemoteService', 'info');
               await worker.downloadTo(job.localPath, job.remotePath);
               downloadedCount++;
+              
+              if (progress) {
+                progress.report({ message: `[${Math.round((downloadedCount / totalFiles) * 100)}%] ${pathMod.basename(job.remotePath)}` });
+              }
+              
               LoggerService.log(`END: ${job.remotePath}`, 'FtpRemoteService', 'info');
               vscode.window.setStatusBarMessage(
-                LangService.t('downloadProgressStatus', { downloaded: downloadedCount, total: filesToDownload.length }),
+                LangService.t('downloadProgressStatus', { downloaded: downloadedCount, total: totalFiles }),
                 2000
               );
             }
@@ -667,53 +680,61 @@ export class FtpRemoteService implements RemoteService {
       LoggerService.log(`END canceled: no selection`, 'FtpRemoteService', 'info');
       return;
     }
-    LoggerService.log(`Selected URIs:`, 'FtpRemoteService', 'info');
-    uris.forEach((uri: any) => LoggerService.log(`URI: ${uri.fsPath}`, 'FtpRemoteService', 'info'));
-    const pathMod = require('path');
-    const fs = require('fs');
-    let anyError = false;
-    for (const uri of uris) {
-      const localPath = uri.fsPath;
-      LoggerService.log(`Processing localPath: ${localPath}`, 'FtpRemoteService', 'info');
-      let uploadTarget = targetPath;
-      try {
-        const stat = fs.statSync(localPath);
-        LoggerService.log(`Stat: isDirectory=${stat.isDirectory()}, isFile=${stat.isFile()}`, 'FtpRemoteService', 'info');
-        if (stat.isDirectory()) {
-          uploadTarget = pathMod.join(targetPath, pathMod.basename(localPath));
-          await this.uploadDir(localPath, uploadTarget);
-        } else {
-          await this.upload(localPath, pathMod.join(uploadTarget, pathMod.basename(localPath)));
+
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: LangService.t('uploadInProgress'),
+        cancellable: true
+    }, async (progress) => {
+        treeDataProvider.treeLocker.lock(LangService.t('uploadInProgress'), this.connection.label);
+        LoggerService.log(`Selected URIs:`, 'FtpRemoteService', 'info');
+        uris.forEach((uri: any) => LoggerService.log(`URI: ${uri.fsPath}`, 'FtpRemoteService', 'info'));
+        
+        const pathMod = require('path');
+        const fs = require('fs');
+        let anyError = false;
+        for (const uri of uris) {
+          const localPath = uri.fsPath;
+          LoggerService.log(`Processing localPath: ${localPath}`, 'FtpRemoteService', 'info');
+          let uploadTarget = targetPath;
+          try {
+            const stat = fs.statSync(localPath);
+            LoggerService.log(`Stat: isDirectory=${stat.isDirectory()}, isFile=${stat.isFile()}`, 'FtpRemoteService', 'info');
+            if (stat.isDirectory()) {
+              uploadTarget = pathMod.join(targetPath, pathMod.basename(localPath));
+              await this.uploadDir(localPath, uploadTarget, progress);
+            } else {
+              progress.report({ message: `Uploading ${pathMod.basename(localPath)}` });
+              await this.upload(localPath, pathMod.join(uploadTarget, pathMod.basename(localPath)));
+            }
+          } catch (e: any) {
+            anyError = true;
+            LoggerService.log(`${e instanceof Error ? e.message : String(e)}`, 'FtpRemoteService', 'error');
+            vscode.window.showErrorMessage(LangService.t('uploadError', { error: (e instanceof Error ? e.message : String(e)) }));
+          }
         }
-      } catch (e: any) {
-        anyError = true;
-        LoggerService.log(`${e instanceof Error ? e.message : String(e)}`, 'FtpRemoteService', 'error');
-        vscode.window.showErrorMessage(LangService.t('uploadError', { error: (e instanceof Error ? e.message : String(e)) }));
-      }
-    }
-    if (!anyError) {
-      vscode.window.showInformationMessage(LangService.t('uploadSuccess'));
-      LoggerService.log(`END success target=${targetPath}`, 'FtpRemoteService', 'info');
-    } else {
-      LoggerService.log(`END fail target=${targetPath}`, 'FtpRemoteService', 'error');
-    }
-    const refreshPath = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder'
-      ? targetPath
-      : RemotePathHelper.getParentRemotePath(targetPath);
-    RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ftp');
+        if (!anyError) {
+          vscode.window.showInformationMessage(LangService.t('uploadSuccess'));
+          LoggerService.log(`END success target=${targetPath}`, 'FtpRemoteService', 'info');
+        } else {
+          LoggerService.log(`END fail target=${targetPath}`, 'FtpRemoteService', 'error');
+        }
+        
+        treeDataProvider.treeLocker.unlock();
+        const refreshPath = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder'
+          ? targetPath
+          : RemotePathHelper.getParentRemotePath(targetPath);
+        RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ftp');
+    });
   }
 
   async upload(localPath: string, remotePath: string): Promise<void> {
     return this._mutex.acquire(async () => {
-      
       const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
-      
       if (!session || (session as any).closed) {
         throw new Error(LangService.t('ftpSessionNotInitializedForConnection', { label: this.connection.label }));
       }
-
       LoggerService.log(`START: ${localPath} -> ${remotePath}`, 'FtpRemoteService', 'info');
-      
       try {
         await session.uploadFrom(localPath, remotePath);
         LoggerService.log(`END success: ${remotePath}`, 'FtpRemoteService', 'info');
@@ -724,16 +745,14 @@ export class FtpRemoteService implements RemoteService {
     });
   }
 
-  async uploadDir(localDir: string, remoteDir: string): Promise<void> {
+  async uploadDir(localDir: string, remoteDir: string, progress?: any): Promise<void> {
     return this._mutex.acquire(async () => {
       const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
-      
       if (!session || (session as any).closed) {
         throw new Error(LangService.t('ftpSessionNotInitializedForConnection', { label: this.connection.label }));
       }
 
       LoggerService.log(`START: ${localDir} -> ${remoteDir}`, 'FtpRemoteService', 'info');
-
       const fs = require('fs');
       const pathMod = require('path');
       const normalizedRoot = String(remoteDir).replace(/\\/g, '/');
@@ -750,7 +769,6 @@ export class FtpRemoteService implements RemoteService {
             return;
           }
           visitedRealDirs.add(realDir);
-
           dirsToEnsure.push(currentRemoteDir);
           const entries = await fs.promises.readdir(currentLocalDir, { withFileTypes: true });
           for (const entry of entries) {
@@ -773,9 +791,16 @@ export class FtpRemoteService implements RemoteService {
 
         const previousDir = await session.pwd().catch(() => '/');
         LoggerService.log(`BASE dir before ensure: ${previousDir}`, 'FtpRemoteService', 'info');
+        
+        const uniqueDirs = Array.from(new Set(dirsToEnsure));
         try {
-          for (const dir of Array.from(new Set(dirsToEnsure))) {
-            // ensureDir changes current directory; reset to base so relative paths stay stable
+          for (let i = 0; i < uniqueDirs.length; i++) {
+            const dir = uniqueDirs[i];
+            
+            if (progress) {
+              progress.report({ message: `Creating filder: ${i + 1}/${uniqueDirs.length}` });
+            }
+
             await session.cd(previousDir);
             LoggerService.log(`START base=${previousDir} ensure=${dir}`, 'FtpRemoteService', 'info');
             try {
@@ -799,6 +824,8 @@ export class FtpRemoteService implements RemoteService {
         const CONCURRENCY_LIMIT = ConfigService.getConcurrencyLimit('ftpUploadConcurrency', 3);
         const queue = [...fileJobs];
         let uploadedCount = 0;
+        const totalFiles = fileJobs.length;
+        let lastReportTime = 0;
 
         const workers: FtpClient[] = await Promise.all(
           Array(Math.min(CONCURRENCY_LIMIT, queue.length))
@@ -810,9 +837,8 @@ export class FtpRemoteService implements RemoteService {
           const workerRun = async (worker: FtpClient): Promise<void> => {
             while (queue.length > 0) {
               const job = queue.shift();
-              if (!job) {
-                continue;
-              }
+              if (!job) continue;
+              
               LoggerService.log(`START: ${job.localPath} -> ${job.remotePath}`, 'FtpRemoteService', 'info');
               try {
                 await worker.uploadFrom(job.localPath, job.remotePath);
@@ -820,19 +846,25 @@ export class FtpRemoteService implements RemoteService {
                 LoggerService.log(`END fail: ${job.remotePath} error=${uploadErr?.message || String(uploadErr)}`, 'FtpRemoteService', 'error');
                 throw uploadErr;
               }
+              
               uploadedCount++;
-              LoggerService.log(`END: ${job.remotePath}`, 'FtpRemoteService', 'info');
-              vscode.window.setStatusBarMessage(`Remotix: Uploaded ${uploadedCount}/${fileJobs.length} items`, 2000);
+              const now = Date.now();
+              
+              if (progress && (now - lastReportTime > 200 || uploadedCount === totalFiles)) {
+                  lastReportTime = now;
+                  const percent = Math.round((uploadedCount / totalFiles) * 100);
+                  progress.report({ message: `[${percent}%] ${uploadedCount}/${totalFiles}: ${pathMod.basename(job.localPath)}` });
+              }
+              
+              LoggerService.log(`END: ${job.remotePath} [${uploadedCount}/${totalFiles}]`, 'FtpRemoteService', 'info');
+              vscode.window.setStatusBarMessage(`Remotix: Uploaded ${uploadedCount}/${totalFiles} items`, 2000);
             }
           };
 
           await Promise.all(workers.map((worker) => workerRun(worker)));
         } finally {
           for (const worker of workers) {
-            try {
-              worker.close();
-            } catch {
-            }
+            try { worker.close(); } catch {}
           }
         }
 
@@ -983,13 +1015,15 @@ export class FtpRemoteService implements RemoteService {
   }
 
 
-  async deleteFileWithDialogs(item: any): Promise<void> {
+  async deleteWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
     const ftpPath = RemoteCrudDialogHelper.getRemotePath(item);
+    
     if (!ftpPath) {
       vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
       return;
     }
+
     const isDir = RemoteCrudDialogHelper.isDirectoryItem(item);
     const confirm = await vscode.window.showWarningMessage(
       LangService.t(isDir ? 'confirmDeleteFolder' : 'confirmDeleteFile', { path: ftpPath }),
@@ -997,24 +1031,41 @@ export class FtpRemoteService implements RemoteService {
       LangService.t('delete')
     );
     if (confirm !== LangService.t('delete')) return;
-    LoggerService.log(`START type=${isDir ? 'directory' : 'file'} path=${ftpPath}`, 'FtpRemoteService', 'info');
-    treeDataProvider?.treeLocker?.lock(LangService.t('deleteInProgress'), this.connection.label);
-    try {
-      if (isDir) {
-        await this.deleteDir(ftpPath);
-        vscode.window.showInformationMessage(LangService.t('folderDeleted', { path: ftpPath }));
-      } else {
-        await this.deleteFile(ftpPath);
-        vscode.window.showInformationMessage(LangService.t('fileDeleted', { path: ftpPath }));
-      }
-      RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, RemotePathHelper.getParentRemotePath(ftpPath), 'ftp');
-      LoggerService.log(`END success type=${isDir ? 'directory' : 'file'} path=${ftpPath}`, 'FtpRemoteService', 'info');
-    } catch (e: any) {
-      LoggerService.log(`END fail type=${isDir ? 'directory' : 'file'} path=${ftpPath} error=${e instanceof Error ? e.message : String(e)}`, 'FtpRemoteService', 'error');
-      vscode.window.showErrorMessage(LangService.t('deleteFailed', { error: (e instanceof Error ? e.message : String(e)) }));
-    } finally {
-      treeDataProvider?.treeLocker?.unlock();
-    }
+    
+    treeDataProvider?.treeLocker?.lock('', this.connection.label);
+
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: LangService.t('deleteInProgress'),
+      cancellable: false
+    }, async (progress) => {
+        LoggerService.log(`START type=${isDir ? 'directory' : 'file'} path=${ftpPath}`, 'FtpRemoteService', 'info');
+        
+        try {
+          if (isDir) {
+            await this.deleteDir(ftpPath, progress);
+            vscode.window.showInformationMessage(LangService.t('folderDeleted', { path: ftpPath }));
+          } else {
+            progress.report({ message: ftpPath });
+            await this.deleteFile(ftpPath);
+            vscode.window.showInformationMessage(LangService.t('fileDeleted', { path: ftpPath }));
+          }
+          
+          RemoteRefreshHelper.refreshRemoteFolder(
+            treeDataProvider, 
+            this.connection.label, 
+            RemotePathHelper.getParentRemotePath(ftpPath), 
+            'ftp'
+          );
+          LoggerService.log(`END success type=${isDir ? 'directory' : 'file'} path=${ftpPath}`, 'FtpRemoteService', 'info');
+        } catch (e: any) {
+            const errorMsg = e instanceof Error ? e.message : String(e);
+            LoggerService.log(`END fail type=${isDir ? 'directory' : 'file'} path=${ftpPath} error=${errorMsg}`, 'FtpRemoteService', 'error');
+            vscode.window.showErrorMessage(LangService.t('deleteFailed', { error: errorMsg }));
+        } finally {
+            treeDataProvider?.treeLocker?.unlock();
+        }
+    });
   }
 
   async deleteFile(remotePath: string): Promise<void> {
@@ -1038,68 +1089,67 @@ export class FtpRemoteService implements RemoteService {
     });
   }
 
-  async deleteDir(remoteDir: string): Promise<void> {
+  async deleteDir(remoteDir: string, progress?: any): Promise<void> {
     return this._mutex.acquire(async () => {
       const session = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
       
       if (!session || (session as any).closed) {
-        throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
+          throw new Error(`FTP session not initialized or connection closed for ${this.connection.label}`);
       }
 
       const absoluteRemoteDir = RemotePathHelper.toAbsoluteRemotePath(remoteDir, this.initialPath);
       LoggerService.log(`START: ${remoteDir} (absolute=${absoluteRemoteDir})`, 'FtpRemoteService', 'info');
 
-      // Prefer server-side recursive delete first on a separate client with timeout.
-      // This prevents the main session from appearing frozen if the server stalls.
       try {
         const nativeTimeoutMs = 12000;
-        vscode.window.setStatusBarMessage('Remotix: Deleting directory (server-side)...', 1500);
-        LoggerService.log(`native-removeDir START: ${absoluteRemoteDir} timeout=${nativeTimeoutMs}ms`, 'FtpRemoteService', 'info');
-
         const nativeClient = await this.createWorkerClient();
         try {
           await Promise.race([
-            nativeClient.removeDir(absoluteRemoteDir),
-            new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error(`native-removeDir timeout after ${nativeTimeoutMs}ms`)), nativeTimeoutMs);
-            })
+              nativeClient.removeDir(absoluteRemoteDir),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), nativeTimeoutMs))
           ]);
-
-          LoggerService.log(`END success: ${absoluteRemoteDir} strategy=native-removeDir`, 'FtpRemoteService', 'info');
+          if (progress) progress.report({ message: `Видалено: ${require('path').basename(remoteDir)}` });
           return;
         } finally {
-          try {
-            nativeClient.close();
-          } catch {
-          }
+          try { nativeClient.close(); } catch {}
         }
       } catch (nativeErr: any) {
-        LoggerService.log(`native-removeDir fail: ${absoluteRemoteDir} error=${nativeErr?.message || String(nativeErr)}; fallback=manual-recursive`, 'FtpRemoteService', 'error');
+          LoggerService.log(`native-removeDir fail: fallback=manual-recursive`, 'FtpRemoteService', 'error');
       }
 
       const stats = { files: 0, dirs: 0 };
-      let step = 0;
+      let lastReportTime = 0;
+
       const onProgress = (stage: string, path: string) => {
-        step++;
-        if (step % 10 === 0) {
-          vscode.window.setStatusBarMessage(`Remotix: Deleting ${stats.files} files, ${stats.dirs} dirs`, 1500);
+        const now = Date.now();
+        if (progress && (now - lastReportTime > 200)) { // Throttling
+          lastReportTime = now;
+          progress.report({ 
+            message: `Deleting: ${require('path').basename(path)} (${stats.files + stats.dirs} елементів)` 
+          });
         }
-        LoggerService.log(`step=${step} stage=${stage} path=${path} files=${stats.files} dirs=${stats.dirs}`, 'FtpRemoteService', 'info');
+        LoggerService.log(`stage=${stage} path=${path} files=${stats.files} dirs=${stats.dirs}`, 'FtpRemoteService', 'info');
       };
 
       try {
         const manualClient = await this.createWorkerClient();
         try {
-          await this._recursiveDelete(manualClient, absoluteRemoteDir, stats, onProgress, new Set<string>(), 0, absoluteRemoteDir, new Set<string>());
+          await this._recursiveDelete(
+            manualClient, 
+            absoluteRemoteDir, 
+            stats, 
+            onProgress, 
+            new Set<string>(), 
+            0, 
+            absoluteRemoteDir, 
+            new Set<string>()
+          );
         } finally {
-          try {
-            manualClient.close();
-          } catch {
-          }
+          try { manualClient.close(); } catch {}
         }
         LoggerService.log(`END success: ${absoluteRemoteDir} summary(files=${stats.files}, dirs=${stats.dirs})`, 'FtpRemoteService', 'info');
       } catch (err: any) {
-        LoggerService.log(`END fail: ${absoluteRemoteDir} error=${err.message} summary(files=${stats.files}, dirs=${stats.dirs})`, 'FtpRemoteService', 'error');
+        LoggerService.log(`DELETE DIR END fail: ${err.message}`, 'FtpRemoteService', 'error');
         throw err;
       }
     });
