@@ -363,7 +363,7 @@ export class SshRemoteService implements RemoteService {
                                 item.resourceUri = vscode.Uri.file('/ssh/' + encodeURIComponent(this.connection.label) + fullPath);
                               } catch {}
                               item.command = {
-                                command: 'remotixView.itemClick',
+                                command: 'remotix.elementDoubleClick',
                                 title: LangService.t('openFile'),
                                 arguments: [{
                                   label: f.filename,
@@ -437,9 +437,7 @@ export class SshRemoteService implements RemoteService {
       openLabel: LangService.t('chooseDownloadTarget'),
       defaultUri: vscode.Uri.file(homeDir)
     });
-    if (!uri || uri.length === 0) {
-      return;
-    }
+    if (!uri || uri.length === 0) return;
 
     const remoteDir = RemotePathHelper.normalizeRemotePath(remoteDirRaw).replace(/\/+$/g, '') || '/';
     const folderName = remoteDir.split('/').filter(Boolean).pop();
@@ -453,18 +451,12 @@ export class SshRemoteService implements RemoteService {
       value: `${folderName}.tar.gz`,
       validateInput: (value) => {
         const trimmed = String(value || '').trim();
-        if (!trimmed) {
-          return LangService.t('archiveFileNameRequired');
-        }
-        if (/[\\/]/.test(trimmed)) {
-          return LangService.t('archiveFileNameNoPathSeparators');
-        }
+        if (!trimmed) return LangService.t('archiveFileNameRequired');
+        if (/[\\/]/.test(trimmed)) return LangService.t('archiveFileNameNoPathSeparators');
         return undefined;
       }
     });
-    if (!archiveNameInput) {
-      return;
-    }
+    if (!archiveNameInput) return;
 
     const pathMod = require('path');
     const fsMod = require('fs');
@@ -473,34 +465,32 @@ export class SshRemoteService implements RemoteService {
 
     const parentRemotePath = RemotePathHelper.getParentRemotePath(remoteDir);
     const streamArchiveCommand = `tar -C ${this.quoteForShell(parentRemotePath)} -czf - ${this.quoteForShell(folderName)}`;
-    const isIgnorableTarWarning = (message: string): boolean => {
-      const normalized = message.toLowerCase();
-      return normalized.includes('file changed as we read it');
-    };
+    const isIgnorableTarWarning = (message: string): boolean => message.toLowerCase().includes('file changed as we read it');
+    
     let archiveDownloadedWithWarnings = false;
     let archiveWarningText = '';
 
     LoggerService.log(`START dir=${remoteDir} local=${localDest}`, 'SshRemoteService', 'info');
 
     try {
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: LangService.t('archiveDownloadInProgress'),
-          cancellable: false,
-        },
-        async (progress) => {
-          progress.report({ message: LangService.t('archiveDownloadTransfer') });
+      await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: LangService.t('downloading') + '\n',
+        cancellable: true
+      }, async (progress, token) => {
+          progress.report({ message: `[...]: ${archiveName}` });
+          
           const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
-          if (!session) {
-            throw new Error('SSH session is not available');
-          }
+          if (!session) throw new Error('SSH session is not available');
 
-          await new Promise<void>((resolve, reject) => {
+          return new Promise<void>((resolve, reject) => {
             session.exec(streamArchiveCommand, (err, stream) => {
-              if (err) {
-                return reject(err);
-              }
+              if (err) return reject(err);
+
+              token.onCancellationRequested(() => {
+                stream.destroy();
+                reject(new Error('Cancelled'));
+              });
 
               const writeStream = fsMod.createWriteStream(localDest);
               const stderrChunks: string[] = [];
@@ -509,49 +499,27 @@ export class SshRemoteService implements RemoteService {
               let settled = false;
 
               const finishSuccess = () => {
-                if (settled || !streamClosed || !writeClosed) {
-                  return;
-                }
+                if (settled || !streamClosed || !writeClosed) return;
                 settled = true;
                 resolve();
               };
 
               const finishError = (error: Error) => {
-                if (settled) {
-                  return;
-                }
+                if (settled) return;
                 settled = true;
-                try {
-                  writeStream.destroy();
-                } catch {
-                  // noop
-                }
-                try {
-                  fsMod.rmSync(localDest, { force: true });
-                } catch {
-                  // noop
-                }
+                try { writeStream.destroy(); } catch {}
+                try { fsMod.rmSync(localDest, { force: true }); } catch {}
                 reject(error);
               };
 
-              stream.on('error', (streamErr: Error) => {
-                finishError(streamErr);
-              });
+              stream.on('error', (e: Error) => finishError(e));
+              writeStream.on('error', (e: Error) => { stream.destroy(); finishError(e); });
+              writeStream.on('close', () => { writeClosed = true; finishSuccess(); });
 
-              writeStream.on('error', (writeErr: Error) => {
-                stream.destroy();
-                finishError(writeErr);
-              });
-
-              writeStream.on('close', () => {
-                writeClosed = true;
-                finishSuccess();
-              });
-
-              stream.stderr.on('data', (data: Buffer) => {
-                const message = data.toString();
-                stderrChunks.push(message);
-                LoggerService.log(`stderr: ${message}`, 'SshRemoteService', 'error');
+              stream.stderr.on('data', (d: Buffer) => {
+                const msg = d.toString();
+                stderrChunks.push(msg);
+                LoggerService.log(`stderr: ${msg}`, 'SshRemoteService', 'error');
               });
 
               stream.on('close', (code: number) => {
@@ -560,42 +528,38 @@ export class SshRemoteService implements RemoteService {
                 const stderrText = stderrChunks.join('');
                 if (code === 0) {
                   finishSuccess();
-                  return;
-                }
-
-                if (code === 1 && stderrText && isIgnorableTarWarning(stderrText)) {
-                  LoggerService.log(`tar exited with warning only; treating as success`, 'SshRemoteService', 'warning');
+                } else if (code === 1 && stderrText && isIgnorableTarWarning(stderrText)) {
                   archiveDownloadedWithWarnings = true;
                   archiveWarningText = stderrText.trim();
                   finishSuccess();
-                  return;
+                } else {
+                  finishError(new Error(stderrText.trim() || `tar exited with code ${code}`));
                 }
-
-                finishError(new Error(stderrText.trim() || `tar exited with code ${code}`));
               });
 
               stream.pipe(writeStream);
-            });
           });
-        }
-      );
+        });
+      });
 
       const showAction = LangService.t('showInFolder');
       vscode.window.showInformationMessage(LangService.t('archiveDownloadSuccess', { path: localDest }), showAction).then(action => {
-        if (action === showAction) {
-          vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(localDest));
-        }
+        if (action === showAction) vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(localDest));
       });
+
       if (archiveDownloadedWithWarnings) {
         LoggerService.log(`END success with warnings dir=${remoteDir} warning=${archiveWarningText}`, 'SshRemoteService', 'warning');
         vscode.window.showWarningMessage(LangService.t('archiveDownloadWarningChangedFiles'));
       }
       LoggerService.log(`END success dir=${remoteDir} local=${localDest}`, 'SshRemoteService', 'info');
+
     } catch (error: any) {
-      LoggerService.log(`END fail dir=${remoteDir} error=${error instanceof Error ? error.message : String(error)}`, 'SshRemoteService', 'error');
-      vscode.window.showErrorMessage(LangService.t('archiveDownloadError', {
-        error: error instanceof Error ? error.message : String(error)
-      }));
+      if (error.message !== 'Cancelled') {
+        LoggerService.log(`END fail dir=${remoteDir} error=${error instanceof Error ? error.message : String(error)}`, 'SshRemoteService', 'error');
+        vscode.window.showErrorMessage(LangService.t('archiveDownloadError', {
+            error: error instanceof Error ? error.message : String(error)
+        }));
+      }
     }
   }
 
@@ -604,350 +568,369 @@ export class SshRemoteService implements RemoteService {
     if (!remotePath) throw new Error('Remote path is missing');
 
     const pathMod = require('path');
+    const fs = require('fs');
     const localDest = pathMod.join(localTarget, pathMod.basename(remotePath));
 
     const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
 
-    return await new Promise<void>((resolve, reject) => {
-      session.sftp((err, sftp) => {
-        if (err) {
-          LoggerService.log(`SFTP Error: ${err.message}`, 'SshRemoteService', 'error');
-          return reject(err);
-        }
+    return await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: LangService.t('downloading'),
+      cancellable: true
+    }, async (progress, token) => {
+      return await new Promise<void>((resolve, reject) => {
+        session.sftp((err, sftp) => {
+          if (err) {
+            LoggerService.log(`SFTP Error: ${err.message}`, 'SshRemoteService', 'error');
+            return reject(err);
+          }
 
-        LoggerService.log(`START: ${remotePath} -> ${localDest}`, 'SshRemoteService', 'info');
+          sftp.stat(remotePath, (statErr, stats) => {
+            const fileSize = stats?.size || 0;
+            let received = 0;
 
-        const writeStream = fs.createWriteStream(localDest);
-        const readStream = sftp.createReadStream(remotePath);
+            LoggerService.log(`START: ${remotePath} -> ${localDest}`, 'SshRemoteService', 'info');
 
-        writeStream.on('error', (e: Error) => {
-          LoggerService.log(`WriteStream Error: ${e.message}`, 'SshRemoteService', 'error');
-          sftp.end();
-          reject(e);
+            const writeStream = fs.createWriteStream(localDest);
+            const readStream = sftp.createReadStream(remotePath);
+
+            token.onCancellationRequested(() => {
+              readStream.destroy();
+              writeStream.destroy();
+              sftp.end();
+              reject(new Error('Cancelled'));
+            });
+
+            readStream.on('data', (chunk: Buffer) => {
+              received += chunk.length;
+              const percent = fileSize > 0 ? Math.round((received / fileSize) * 100) : 100;
+              progress.report({ message: `[${percent}%] 1/1: ${pathMod.basename(remotePath)}` });
+            });
+
+            writeStream.on('error', (e: Error) => {
+              LoggerService.log(`WriteStream Error: ${e.message}`, 'SshRemoteService', 'error');
+              sftp.end();
+              reject(e);
+            });
+
+            readStream.on('error', (e: Error) => {
+              LoggerService.log(`ReadStream Error: ${e.message}`, 'SshRemoteService', 'error');
+              sftp.end();
+              reject(e);
+            });
+
+            writeStream.on('close', () => {
+              LoggerService.log(`END success: ${localDest}`, 'SshRemoteService', 'info');
+              sftp.end();
+              resolve();
+            });
+
+            readStream.pipe(writeStream);
+          });
         });
-
-        readStream.on('error', (e: Error) => {
-          LoggerService.log(`ReadStream Error: ${e.message}`, 'SshRemoteService', 'error');
-          sftp.end();
-          reject(e);
-        });
-
-        writeStream.on('close', () => {
-          LoggerService.log(`END success: ${localDest}`, 'SshRemoteService', 'info');
-          sftp.end();
-          resolve();
-        });
-
-        readStream.pipe(writeStream);
       });
     });
   }
 
   async downloadDir(item: any, localTarget: string): Promise<void> {
-    LoggerService.log(`START: path=${item?.sshPath || item?.ftpPath}, localTarget=${localTarget}`, 'SshRemoteService', 'info');
+    return await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: LangService.t('downloading'),
+      cancellable: true
+    }, async (progress, token) => {
+      LoggerService.log(`START: path=${item?.sshPath || item?.ftpPath}, localTarget=${localTarget}`, 'SshRemoteService', 'info');
 
-    const remoteDir = item?.ftpPath || item?.sshPath;
-    if (!remoteDir) throw new Error('Remote path is missing');
-    const pathMod = require('path');
-    const fs = require('fs');
-    const vscode_ = require('vscode');
-    const localDest = pathMod.join(localTarget, pathMod.basename(remoteDir));
+      const remoteDir = item?.ftpPath || item?.sshPath;
+      if (!remoteDir) throw new Error('Remote path is missing');
+      const pathMod = require('path');
+      const fs = require('fs');
+      const localDest = pathMod.join(localTarget, pathMod.basename(remoteDir));
 
-    const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
+      const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
 
-    return new Promise<void>((resolve, reject) => {
-      session.sftp((err, sftp) => {
-        if (err) return reject(err);
+      return new Promise<void>((resolve, reject) => {
+        session.sftp((err, sftp) => {
+          if (err) return reject(err);
 
-        let downloadedFiles = 0;
-        const CONCURRENCY_LIMIT = ConfigService.getConcurrencyLimit('sshDownloadConcurrency', 4);
+          let downloadedFiles = 0;
+          const CONCURRENCY_LIMIT = ConfigService.getConcurrencyLimit('sshDownloadConcurrency', 4);
 
-        const readdirAsync = (dir: string): Promise<any[]> =>
-          new Promise((res, rej) => sftp.readdir(dir, (e, list) => (e ? rej(e) : res(list || []))));
+          const readdirAsync = (dir: string): Promise<any[]> =>
+            new Promise((res, rej) => sftp.readdir(dir, (e, list) => (e ? rej(e) : res(list || []))));
 
-        const downloadFile = (entryRemotePath: string, entryLocalPath: string, entryName: string, fileSize: number): Promise<void> => {
-          return new Promise<void>((res, rej) => {
-            LoggerService.log(`START: ${entryRemotePath}`, 'SshRemoteService', 'info');
-            let received = 0;
-            const readStream = sftp.createReadStream(entryRemotePath);
-            const writeStream = fs.createWriteStream(entryLocalPath);
+          const downloadFile = (entryRemotePath: string, entryLocalPath: string, entryName: string, fileSize: number): Promise<void> => {
+            return new Promise<void>((res, rej) => {
+              LoggerService.log(`START: ${entryRemotePath}`, 'SshRemoteService', 'info');
+              let received = 0;
+              const readStream = sftp.createReadStream(entryRemotePath);
+              const writeStream = fs.createWriteStream(entryLocalPath);
 
-            readStream.on('data', (chunk: Buffer) => {
-              received += chunk.length;
-              if (fileSize > 0) {
-                const percent = Math.round((received / fileSize) * 100);
-                vscode_.window.setStatusBarMessage(`Remotix: ${entryName} [${percent}%]`, 1000);
-              }
+              readStream.on('data', (chunk: Buffer) => {
+                received += chunk.length;
+                if (fileSize > 0) {
+                  const percent = Math.round((received / fileSize) * 100);
+                  progress.report({ message: `[${percent}%] ${entryName}` });
+                }
+              });
+
+              const handleError = (e: Error) => {
+                readStream.destroy();
+                writeStream.destroy();
+                LoggerService.log(`END fail: ${entryRemotePath} error=${e.message}`, 'SshRemoteService', 'error');
+                rej(e);
+              };
+
+              readStream.on('error', handleError);
+              writeStream.on('error', handleError);
+
+              writeStream.on('finish', () => {
+                downloadedFiles++;
+                LoggerService.log(`END: ${entryRemotePath}`, 'SshRemoteService', 'info');
+                res();
+              });
+
+              readStream.pipe(writeStream);
             });
+          };
 
-            const handleError = (e: Error) => {
-              readStream.destroy();
-              writeStream.destroy();
-              LoggerService.log(`END fail: ${entryRemotePath} error=${e.message}`, 'SshRemoteService', 'error');
-              rej(e);
-            };
+          const recursiveDownload = async (rDir: string, lDir: string): Promise<void> => {
+            if (token.isCancellationRequested) throw new Error('Cancelled');
+            if (!fs.existsSync(lDir)) {
+              fs.mkdirSync(lDir, { recursive: true });
+            }
 
-            readStream.on('error', handleError);
-            writeStream.on('error', handleError);
+            const list = await readdirAsync(rDir);
+            const entries = list.filter((entry: any) => entry.filename !== '.' && entry.filename !== '..');
+            const dirs = entries.filter((entry: any) => entry.attrs?.isDirectory?.());
+            const files = entries.filter((entry: any) => !entry.attrs?.isDirectory?.());
+            LoggerService.log(`BATCH: dir=${rDir} dirs=${dirs.length} files=${files.length}`, 'SshRemoteService', 'info');
 
-            writeStream.on('finish', () => {
-              downloadedFiles++;
-              LoggerService.log(`END: ${entryRemotePath}`, 'SshRemoteService', 'info');
-              vscode_.window.setStatusBarMessage(`Remotix: Завантажено ${downloadedFiles} файлів`, 2000);
-              res();
-            });
-
-            readStream.pipe(writeStream);
-          });
-        };
-
-        const recursiveDownload = async (rDir: string, lDir: string): Promise<void> => {
-          if (!fs.existsSync(lDir)) {
-            fs.mkdirSync(lDir, { recursive: true });
-          }
-
-          const list = await readdirAsync(rDir);
-          const entries = list.filter((entry: any) => entry.filename !== '.' && entry.filename !== '..');
-          const dirs = entries.filter((entry: any) => entry.attrs?.isDirectory?.());
-          const files = entries.filter((entry: any) => !entry.attrs?.isDirectory?.());
-          LoggerService.log(`BATCH: dir=${rDir} dirs=${dirs.length} files=${files.length}`, 'SshRemoteService', 'info');
-
-          // Build folders first to keep structure predictable.
-          for (const entry of dirs) {
-            const entryRemotePath = rDir.endsWith('/') ? rDir + entry.filename : rDir + '/' + entry.filename;
-            const entryLocalPath = pathMod.join(lDir, entry.filename);
-            await recursiveDownload(entryRemotePath, entryLocalPath);
-          }
-
-          const queue = [...files];
-          const worker = async (): Promise<void> => {
-            while (queue.length > 0) {
-              const entry = queue.shift();
-              if (!entry) continue;
+            for (const entry of dirs) {
               const entryRemotePath = rDir.endsWith('/') ? rDir + entry.filename : rDir + '/' + entry.filename;
               const entryLocalPath = pathMod.join(lDir, entry.filename);
-              const fileSize = entry.attrs?.size || 0;
-              await downloadFile(entryRemotePath, entryLocalPath, entry.filename, fileSize);
+              await recursiveDownload(entryRemotePath, entryLocalPath);
+            }
+
+            const queue = [...files];
+            const worker = async (): Promise<void> => {
+              while (queue.length > 0) {
+                const entry = queue.shift();
+                if (!entry) continue;
+                const entryRemotePath = rDir.endsWith('/') ? rDir + entry.filename : rDir + '/' + entry.filename;
+                const entryLocalPath = pathMod.join(lDir, entry.filename);
+                const fileSize = entry.attrs?.size || 0;
+                await downloadFile(entryRemotePath, entryLocalPath, entry.filename, fileSize);
+              }
+            };
+
+            const workerCount = Math.min(CONCURRENCY_LIMIT, queue.length);
+            if (workerCount > 0) {
+              await Promise.all(Array(workerCount).fill(null).map(() => worker()));
             }
           };
 
-          const workerCount = Math.min(CONCURRENCY_LIMIT, queue.length);
-          if (workerCount > 0) {
-            await Promise.all(Array(workerCount).fill(null).map(() => worker()));
-          }
-        };
+          token.onCancellationRequested(() => { sftp.end(); reject(new Error('Cancelled')); });
 
-        recursiveDownload(remoteDir, localDest)
-          .then(() => {
-            sftp.end();
-            vscode_.window.setStatusBarMessage('Remotix: Завантаження папки завершено', 5000);
-            LoggerService.log(`END success: ${remoteDir}`, 'SshRemoteService', 'info');
-            resolve();
-          })
-          .catch((finalErr: Error) => {
-            sftp.end();
-            LoggerService.log(`END fail: ${remoteDir} error=${finalErr.message}`, 'SshRemoteService', 'error');
-            reject(finalErr);
-          });
+          recursiveDownload(remoteDir, localDest)
+            .then(() => {
+              sftp.end();
+              LoggerService.log(`END success: ${remoteDir}`, 'SshRemoteService', 'info');
+              resolve();
+            })
+            .catch((finalErr: Error) => {
+              sftp.end();
+              LoggerService.log(`END fail: ${remoteDir} error=${finalErr.message}`, 'SshRemoteService', 'error');
+              reject(finalErr);
+            });
+        });
       });
     });
   }
 
+  private async getTotalSize(localPath: string): Promise<number> {
+    const fs = require('fs');
+    const pathMod = require('path');
+    const stats = fs.statSync(localPath);
+    if (stats.isDirectory()) {
+      let size = 1024;
+      const entries = fs.readdirSync(localPath);
+      for (const entry of entries) {
+        size += await this.getTotalSize(pathMod.join(localPath, entry));
+      }
+      return size;
+    }
+    return stats.size;
+  }
 
   async uploadWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
     const targetPath = item?.sshPath || item?.ftpPath;
-    LoggerService.log(`START dialog target=${targetPath || 'unknown'}`, 'SshRemoteService', 'info');
+
     if (!targetPath) {
       vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
-      LoggerService.log(`END fail: missing target path`, 'SshRemoteService', 'error');
       return;
     }
-    const treeDataProviderAny = treeDataProvider as any;
-    const conn = treeDataProviderAny.getConnectionByLabel
-      ? treeDataProviderAny.getConnectionByLabel(this.connection.label)
-      : undefined;
-    if (!conn) {
-      vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
-      LoggerService.log(`END fail: connection not found`, 'SshRemoteService', 'error');
-      return;
-    }
-    
+
     const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
     const uploadType = await vscode.window.showQuickPick(
-        [
-            { label: '$(file) File', value: 'file' },
-            { label: '$(folder) Folder', value: 'folder' }
-        ], 
-        { placeHolder: LangService.t('selectUploadType') }
+      [{ label: '$(file) File', value: 'file' }, { label: '$(folder) Folder', value: 'folder' }],
+      { placeHolder: LangService.t('selectUploadType') }
     );
-
     if (!uploadType) return;
 
-    const isFolder = uploadType.value === 'folder';
-
     const uris = await vscode.window.showOpenDialog({
-        canSelectFiles: !isFolder,
-        canSelectFolders: isFolder,
-        canSelectMany: true,
-        openLabel: LangService.t('select'),
-        defaultUri: vscode.Uri.file(homeDir)
+      canSelectFiles: uploadType.value === 'file',
+      canSelectFolders: uploadType.value === 'folder',
+      canSelectMany: true,
+      defaultUri: vscode.Uri.file(homeDir)
     });
+    if (!uris || uris.length === 0) return;
 
-    if (!uris || uris.length === 0) {
-      LoggerService.log('[SSH][UPLOAD] END canceled: no selection', 'SshRemoteService', 'info');
-      return;
-    }
     const pathMod = require('path');
     const fs = require('fs');
-    let anyError = false;
 
-    try {
-      treeDataProvider.treeLocker.lock(LangService.t('uploadInProgress'), this.connection.label);
-      LoggerService.log(`DEBUG: Tree locked for upload sequence`, 'SshRemoteService', 'info');
-
-      for (const uri of uris) {
-        const localPath = uri.fsPath;
-        let uploadTarget = targetPath;
-        try {
-          const stat = fs.statSync(localPath);
-          if (stat.isDirectory()) {
-            uploadTarget = pathMod.join(targetPath, pathMod.basename(localPath));
-            await this.uploadDir(localPath, uploadTarget);
-          } else {
-            await this.upload(localPath, pathMod.join(uploadTarget, pathMod.basename(localPath)));
-          }
-        } catch (e: any) {
-          anyError = true;
-          vscode.window.showErrorMessage(LangService.t('uploadError', { error: (e instanceof Error ? e.message : String(e)) }));
-        }
-      }
-      if (!anyError) {
-        vscode.window.showInformationMessage(LangService.t('uploadSuccess'));
-        LoggerService.log(`END success target=${targetPath}`, 'SshRemoteService', 'info');
-      } else {
-        LoggerService.log(`END fail target=${targetPath}`, 'SshRemoteService', 'error');
-      }
-    } finally {
-      treeDataProvider.treeLocker.unlock();
-      LoggerService.log(`DEBUG: Tree unlocked after upload sequence`, 'SshRemoteService', 'info');
-      const refreshPath = item?.contextValue === 'ssh-folder' || item?.contextValue === 'ftp-folder'
-        ? targetPath
-        : RemotePathHelper.getParentRemotePath(targetPath);
-      RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ssh');
+    let totalBytes = 0;
+    for (const uri of uris) {
+      totalBytes += await this.getTotalSize(uri.fsPath);
     }
-  }
+    let uploadedBytes = 0;
 
-  async upload(localPath: string, remotePath: string, sftp?: any): Promise<void> {
-      const session = await SessionProvider.getSession<any>(this.connection.label, this);
-
-      return new Promise<void>((resolve, reject) => {
-          const executeUpload = (sftpClient: any) => {
-          LoggerService.log(`START: ${localPath} -> ${remotePath}`, 'SshRemoteService', 'info');
-              sftpClient.fastPut(localPath, remotePath, (err: Error | undefined) => {
-                  if (err) {
-              LoggerService.log(`END fail: ${remotePath} error=${err.message}`, 'SshRemoteService', 'error');
-                      return reject(err);
-                  }
-            LoggerService.log(`END success: ${remotePath}`, 'SshRemoteService', 'info');
-                  resolve();
-              });
-          };
-
-          if (sftp) {
-              executeUpload(sftp);
-          } else {
-              session.sftp((err: Error | undefined, client: any) => {
-                  if (err) return reject(err);
-                  executeUpload(client);
-              });
-          }
-      });
-  }
-
-  async uploadDir(localDir: string, remoteDir: string, existingSftp?: any): Promise<void> {
-      const pathMod = require('path');
-      const fsPromises = require('fs').promises;
-      const normalizedRemote = remoteDir.replace(/\\/g, '/');
-      const visitedRealDirs = new Set<string>();
-
-      LoggerService.log(`START: ${localDir} -> ${normalizedRemote}`, 'SshRemoteService', 'info');
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: LangService.t('uploadInProgress'),
+      cancellable: true
+    }, async (progress, token) => {
+      const reportProgress = (chunkSize: number, fileName: string) => {
+        uploadedBytes += chunkSize;
+        const percent = totalBytes > 0 ? Math.min(100, Math.round((uploadedBytes / totalBytes) * 100)) : 100;
+        progress.report({ message: `[${percent}%] ${fileName}` });
+      };
 
       try {
-          const session = await SessionProvider.getSession<any>(this.connection.label, this);
-          const sftp: any = existingSftp || await new Promise((res, rej) => {
-              LoggerService.log(`DEBUG: Requesting SFTP stream...`, 'SshRemoteService', 'info');
-              session.sftp((err: Error | undefined, client: any) => {
-                  if (err) return rej(err);
-                  LoggerService.log(`DEBUG: SFTP stream ready`, 'SshRemoteService', 'info');
-                  res(client);
-              });
-          });
-
-          await this.createFolder(normalizedRemote);
-          LoggerService.log(`DEBUG: Folder creation stage completed`, 'SshRemoteService', 'info');
-
-          const collectableEntries = await fsPromises.readdir(localDir, { withFileTypes: true });
-          const entries = [] as any[];
-          for (const entry of collectableEntries) {
-            const src = pathMod.join(localDir, entry.name);
-            if (entry.isSymbolicLink && entry.isSymbolicLink()) {
-              LoggerService.log(`SKIP: Symbolic link: ${src}`, 'SshRemoteService', 'info');
-              continue;
-            }
-            entries.push(entry);
+        treeDataProvider.treeLocker.lock(LangService.t('uploadInProgress'), this.connection.label);
+        
+        for (const uri of uris) {
+          if (token.isCancellationRequested) break;
+          
+          const localPath = uri.fsPath;
+          const uploadTarget = pathMod.join(targetPath, pathMod.basename(localPath)).replace(/\\/g, '/');
+          if (fs.statSync(localPath).isDirectory()) {
+            await this.uploadDir(localPath, uploadTarget, reportProgress, token);
+          } else {
+            await this.upload(localPath, uploadTarget, undefined, reportProgress);
           }
-
-          const realDir = await fsPromises.realpath(localDir).catch(() => localDir);
-          if (visitedRealDirs.has(realDir)) {
-            LoggerService.log(`SKIP: Already visited local dir (cycle guard): ${localDir}`, 'SshRemoteService', 'info');
-            return;
-          }
-          visitedRealDirs.add(realDir);
-
-          LoggerService.log(`BATCH: entries=${entries.length} dir=${normalizedRemote}`, 'SshRemoteService', 'info');
-
-          const dirs = entries.filter((entry: any) => entry.isDirectory());
-          const files = entries.filter((entry: any) => !entry.isDirectory());
-
-          for (const entry of dirs) {
-              const src = pathMod.join(localDir, entry.name);
-              const dest = `${normalizedRemote}/${entry.name}`;
-              
-              await this.uploadDir(src, dest, sftp);
-          }
-
-          const CONCURRENCY_LIMIT = ConfigService.getConcurrencyLimit('sshUploadConcurrency', 3);
-          const queue = [...files];
-          const worker = async (): Promise<void> => {
-            while (queue.length > 0) {
-              const entry = queue.shift();
-              if (!entry) {
-                continue;
-              }
-              const src = pathMod.join(localDir, entry.name);
-              const dest = `${normalizedRemote}/${entry.name}`;
-              LoggerService.log(`START: ${src} -> ${dest}`, 'SshRemoteService', 'info');
-              await this.upload(src, dest, sftp);
-              LoggerService.log(`END: ${dest}`, 'SshRemoteService', 'info');
-            }
-          };
-
-          const workerCount = Math.min(CONCURRENCY_LIMIT, queue.length);
-          if (workerCount > 0) {
-            await Promise.all(Array(workerCount).fill(null).map(() => worker()));
-          }
-
-                LoggerService.log(`END success: ${normalizedRemote}`, 'SshRemoteService', 'info');
-
-      } catch (err: any) {
-                LoggerService.log(`END fail: ${normalizedRemote} error=${err.message}`, 'SshRemoteService', 'error');
-          throw err;
+        }
+      } catch (e: any) {
+        vscode.window.showErrorMessage(LangService.t('uploadError', { error: e.message }));
       } finally {
-          if (!existingSftp) {
-                  LoggerService.log('root operation finished', 'SshRemoteService', 'info');
-          }
+        treeDataProvider.treeLocker.unlock();
+        const refreshPath = item?.contextValue?.includes('folder') ? targetPath : RemotePathHelper.getParentRemotePath(targetPath);
+        RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ssh');
       }
+    });
+  }
+
+  async upload(localPath: string, remotePath: string, sftp?: any, progress?: any): Promise<void> {
+    const fs = require('fs');
+    const pathMod = require('path');
+    const fileName = pathMod.basename(localPath);
+
+    const session = await SessionProvider.getSession<any>(this.connection.label, this);
+
+    return new Promise<void>((resolve, reject) => {
+      const executeUpload = (sftpClient: any) => {
+        const writeStream = sftpClient.createWriteStream(remotePath);
+        const readStream = fs.createReadStream(localPath);
+
+        readStream.on('data', (chunk: Buffer) => {
+          if (progress) {
+            if (typeof progress === 'function') {
+              progress(chunk.length, fileName);
+            }
+            else if (typeof progress.report === 'function') {
+              progress.report({ message: LangService.t('downloading') + `: ${fileName}` });
+            }
+          }
+        });
+
+        writeStream.on('close', resolve);
+        readStream.on('error', reject);
+        writeStream.on('error', reject);
+        readStream.pipe(writeStream);
+      };
+
+      if (sftp) executeUpload(sftp);
+      else session.sftp((err: any, client: any) => err ? reject(err) : executeUpload(client));
+    });
+  }
+
+  async uploadDir(
+    localDir: string, 
+    remoteDir: string, 
+    progress?: any, 
+    token?: any, 
+    existingSftp?: any
+  ): Promise<void> {
+    const pathMod = require('path');
+    const fsPromises = require('fs').promises;
+    const normalizedRemote = remoteDir.replace(/\\/g, '/');
+
+    LoggerService.log(`START: ${localDir} -> ${normalizedRemote}`, 'SshRemoteService', 'info');
+
+    try {
+      const session = await SessionProvider.getSession<any>(this.connection.label, this);
+      const sftp: any = existingSftp || await new Promise((res, rej) => {
+        session.sftp((err: Error | undefined, client: any) => {
+          if (err) return rej(err);
+          res(client);
+        });
+      });
+
+      await this.createFolder(normalizedRemote, progress);
+
+      const collectableEntries = await fsPromises.readdir(localDir, { withFileTypes: true });
+      const entries = collectableEntries.filter((e: any) => !(e.isSymbolicLink && e.isSymbolicLink()));
+
+      const dirs = entries.filter((e: any) => e.isDirectory());
+      const files = entries.filter((e: any) => !e.isDirectory());
+
+      for (const entry of dirs) {
+        if (token?.isCancellationRequested) throw new Error('Cancelled');
+        await this.uploadDir(
+          pathMod.join(localDir, entry.name), 
+          `${normalizedRemote}/${entry.name}`, 
+          progress, 
+          token, 
+          sftp
+        );
+      }
+
+      const CONCURRENCY_LIMIT = ConfigService.getConcurrencyLimit('sshUploadConcurrency', 3);
+      const queue = [...files];
+      
+      const worker = async (): Promise<void> => {
+        while (queue.length > 0) {
+          if (token?.isCancellationRequested) throw new Error('Cancelled');
+          const entry = queue.shift();
+          if (!entry) continue;
+
+          const src = pathMod.join(localDir, entry.name);
+          const dest = `${normalizedRemote}/${entry.name}`;
+          
+          await this.upload(src, dest, sftp, progress);
+        }
+      };
+
+      const workerCount = Math.min(CONCURRENCY_LIMIT, queue.length);
+      if (workerCount > 0) {
+        await Promise.all(Array(workerCount).fill(null).map(() => worker()));
+      }
+
+      LoggerService.log(`END success: ${normalizedRemote}`, 'SshRemoteService', 'info');
+    } catch (err: any) {
+      LoggerService.log(`END fail: ${normalizedRemote} error=${err.message}`, 'SshRemoteService', 'error');
+      throw err;
+    }
   }
 
   async createFileWithDialogs(item: any): Promise<void> {
@@ -1031,34 +1014,39 @@ export class SshRemoteService implements RemoteService {
     }
   }
 
-  async createFolder(remoteDir: string): Promise<void> {
-      const session = await SessionProvider.getSession<any>(this.connection.label, this);
-      
-      return new Promise<void>((resolve) => {
-          const timeout = setTimeout(() => {
-              LoggerService.log(`Force resolve для: ${remoteDir}`);
-              resolve();
-          }, 5000);
+  async createFolder(remoteDir: string, reportProgress?: (size: number, name: string) => void): Promise<void> {
+    const session = await SessionProvider.getSession<any>(this.connection.label, this);
+    
+    return new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => {
+          LoggerService.log(`Force resolve для: ${remoteDir}`, 'SshRemoteService', 'warning');
+          resolve();
+        }, 5000);
 
-          session.exec(`mkdir -p "${remoteDir}"`, (err: Error | undefined, stream: any) => {
-              if (err) {
-                  LoggerService.log(`MKDIR ERROR: ${err.message}`, 'SshRemoteService', 'error');
-                  clearTimeout(timeout);
-                  return resolve();
-              }
+        session.exec(`mkdir -p "${remoteDir}"`, (err: Error | undefined, stream: any) => {
+          if (err) {
+            LoggerService.log(`MKDIR ERROR: ${err.message}`, 'SshRemoteService', 'error');
+            clearTimeout(timeout);
+            return resolve();
+          }
 
-              stream.on('data', (data: Buffer) => LoggerService.log(`MKDIR STDOUT: ${data.toString()}`, 'SshRemoteService', 'info'));
-              stream.stderr.on('data', (data: Buffer) => LoggerService.log(`MKDIR STDERR: ${data.toString()}`, 'SshRemoteService', 'error'));
+          stream.on('data', () => {});
+          stream.stderr.on('data', () => {});
 
-              stream.on('close', (code: number | null) => {
-                  clearTimeout(timeout);
-                  LoggerService.log(`MKDIR CLOSE: code: ${code}`, 'SshRemoteService', 'info');
-                  resolve();
-              });
-              
-              stream.end();
+          stream.on('close', (code: number | null) => {
+            clearTimeout(timeout);
+            LoggerService.log(`MKDIR CLOSE: code: ${code}`, 'SshRemoteService', 'info');
+            
+            if (code === 0 && reportProgress) {
+                reportProgress(1024, require('path').basename(remoteDir));
+            }
+            
+            resolve();
           });
+          
+          stream.end();
       });
+    });
   }
 
   async deleteFileWithDialogs(item: any): Promise<void> {
@@ -1524,64 +1512,71 @@ export class SshRemoteService implements RemoteService {
     }
 
     try {
-      await this.getRemoteFileEditService().openWithTempFile({
-        remotePath: filePath,
-        host: this.connection.host,
-        user: this.connection.user,
-        tmpFolderPrefix: 'remotix',
-        downloadToTemp: async (tmpFile) => {
-          const ssh = await SessionProvider.getSession<SshClient>(this.connection.label, this);
-          if (!ssh) {
-            throw new Error(LangService.t('noConnectionsFound'));
-          }
+      await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: LangService.t('downloading'),
+        cancellable: true
+      }, async (progress, token) => {
+        token.onCancellationRequested(() => {
+          LoggerService.log('SSH download cancelled by user');
+          throw new Error('Cancelled');
+        });
 
-          await new Promise<void>((resolve, reject) => {
-            ssh.sftp((err, sftp) => {
-              if (err) {
-                return reject(err);
-              }
+        await this.getRemoteFileEditService().openWithTempFile({
+          remotePath: filePath,
+          host: this.connection.host,
+          user: this.connection.user,
+          tmpFolderPrefix: 'remotix',
+          downloadToTemp: async (tmpFile) => {
+            const ssh = await SessionProvider.getSession<SshClient>(this.connection.label, this);
+            if (!ssh) throw new Error(LangService.t('noConnectionsFound'));
 
-              LoggerService.log(`SFTP session opened for download: ${filePath}`, 'SshRemoteService', 'info');
-              sftp.fastGet(filePath, tmpFile, {}, (downloadErr) => {
-                sftp.end();
-                if (downloadErr) {
-                  return reject(downloadErr);
-                }
-                resolve();
+            await new Promise<void>((resolve, reject) => {
+              ssh.sftp((err, sftp) => {
+                if (err) return reject(err);
+
+                LoggerService.log(`SFTP session opened for download: ${filePath}`, 'SshRemoteService', 'info');
+                
+                sftp.fastGet(filePath, tmpFile, {
+                  step: (total_transferred, chunk, total) => {
+                    const percentage = Math.round((total_transferred / total) * 100);
+                    progress.report({ message: percentage + '%' });
+                  }
+                }, (downloadErr) => {
+                  sftp.end();
+                  if (downloadErr) return reject(downloadErr);
+                  resolve();
+                });
               });
             });
-          });
-        },
-        uploadFromTemp: async (tmpFile) => {
-          const currentSession = await SessionProvider.getSession<SshClient>(this.connection.label, this);
-          if (!currentSession) {
-            throw new Error(LangService.t('noConnectionsFound'));
-          }
+          },
+          uploadFromTemp: async (tmpFile) => {
+            const currentSession = await SessionProvider.getSession<SshClient>(this.connection.label, this);
+            if (!currentSession) throw new Error(LangService.t('noConnectionsFound'));
 
-          await new Promise<void>((resolve, reject) => {
-            currentSession.sftp((err, sftp) => {
-              if (err) {
-                return reject(err);
-              }
+            await new Promise<void>((resolve, reject) => {
+              currentSession.sftp((err, sftp) => {
+                  if (err) return reject(err);
 
-              LoggerService.log(`SFTP session opened for upload: ${filePath}`, 'SshRemoteService', 'info');
-              sftp.fastPut(tmpFile, filePath, {}, (uploadErr) => {
-                sftp.end();
-                if (uploadErr) {
-                  return reject(uploadErr);
-                }
-                resolve();
+                  LoggerService.log(`SFTP session opened for upload: ${filePath}`, 'SshRemoteService', 'info');
+                  sftp.fastPut(tmpFile, filePath, {}, (uploadErr) => {
+                    sftp.end();
+                    if (uploadErr) return reject(uploadErr);
+                    resolve();
+                  });
               });
             });
-          });
-        },
-        logCleanupError: (cleanupError) => {
-          LoggerService.log(`Cleanup error: ${String(cleanupError)}`, 'SshRemoteService', 'error');
-        },
+          },
+          logCleanupError: (cleanupError) => {
+              LoggerService.log(`Cleanup error: ${String(cleanupError)}`, 'SshRemoteService', 'error');
+          },
+        });
       });
     } catch (e: any) {
-      LoggerService.log(`Error: ${e.message}`, 'SshRemoteService', 'error');
-      vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: e.message }));
+      if (e.message !== 'Cancelled') {
+        LoggerService.log(`Error: ${e.message}`, 'SshRemoteService', 'error');
+        vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: e.message }));
+      }
     }
   }
 
@@ -1624,32 +1619,32 @@ export class SshRemoteService implements RemoteService {
     const session = await SessionProvider.getSession<any>(this.connection.label, this);
 
     if (this.sftpClient && this.sftpClient._client !== session) {
-        LoggerService.log(`SFTP Session mismatch (old session died). Resetting SFTP client.`, 'SshRemoteService', 'info');
-        this.sftpClient = null;
+      LoggerService.log(`SFTP Session mismatch (old session died). Resetting SFTP client.`, 'SshRemoteService', 'info');
+      this.sftpClient = null;
     }
 
     if (this.sftpClient) {
-        return this.sftpClient;
+      return this.sftpClient;
     }
 
     return new Promise((resolve, reject) => {
-        LoggerService.log(`Creating new SFTP stream for session...`, 'SshRemoteService', 'info');
-        session.sftp((err: Error | undefined, sftp: any) => {
-            if (err) return reject(err);
-            
-            this.sftpClient = sftp;
-            this.sftpClient._client = session; 
-            this.sftpClient.on('close', () => {
-                LoggerService.log(`SFTP Stream closed for ${this.connection.label}`, 'SshRemoteService', 'info');
-                this.sftpClient = null;
-            });
-            this.sftpClient.on('error', (err: any) => {
-                LoggerService.log(`SFTP ERROR: ${err.message}`, 'SshRemoteService', 'error');
-                this.sftpClient = null;
-            });
-
-            resolve(sftp);
+      LoggerService.log(`Creating new SFTP stream for session...`, 'SshRemoteService', 'info');
+      session.sftp((err: Error | undefined, sftp: any) => {
+        if (err) return reject(err);
+        
+        this.sftpClient = sftp;
+        this.sftpClient._client = session; 
+        this.sftpClient.on('close', () => {
+          LoggerService.log(`SFTP Stream closed for ${this.connection.label}`, 'SshRemoteService', 'info');
+          this.sftpClient = null;
         });
+        this.sftpClient.on('error', (err: any) => {
+          LoggerService.log(`SFTP ERROR: ${err.message}`, 'SshRemoteService', 'error');
+          this.sftpClient = null;
+        });
+
+        resolve(sftp);
+      });
     });
   }
 }

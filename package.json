@@ -221,7 +221,7 @@
         {
           "command": "remotix.editFile",
           "when": "view == remotixView && viewItem == ssh-file",
-          "group": "navigation"
+          "group": "0_edit_file@0"
         },
         {
           "command": "remotix.openSshTerminal",
@@ -311,7 +311,7 @@
         {
           "command": "remotix.editFile",
           "when": "view == remotixView && viewItem == ftp-file",
-          "group": "navigation"
+          "group": "0_edit_file@1"
         },
         {
           "command": "remotix.rename",

@@ -5,16 +5,13 @@ import { LangService } from '../services/LangService';
 import { ConfigService } from '../services/ConfigService';
 import { TreeDataProvider } from '../ui/TreeDataProvider';
 import { SessionProvider } from '../services/SessionProvider';
+import { DoubleClickHelper } from '../helpers/DoubleClickHelper';
 
 export const expandingConnections = new Set<string>();
 
 export function registerUiCommands() {
     const context = Container.get('extensionContext') as vscode.ExtensionContext;
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
-
-    context.subscriptions.push(vscode.commands.registerCommand('remotixView.itemClick', async (item: any) => {
-        await vscode.commands.executeCommand('remotix.editFile', item);
-    }));
 
     context.subscriptions.push(vscode.commands.registerCommand('remotix.moreActions', async () => {
         const pick = await vscode.window.showQuickPick([
@@ -74,44 +71,47 @@ export function registerUiCommands() {
         vscode.window.showInformationMessage(LangService.t('globalConfigPrefix') + JSON.stringify(config));
     }));
 
-    const lastClickTimes = new Map<string, number>();
-  
     const doubleClickCommand = vscode.commands.registerCommand(
-      'remotix.expandConnectionOnDoubleClick', 
-      async (item: vscode.TreeItem) => {
-        const label = (item as any).connectionLabel || String(item.label);
-        
-        if (SessionProvider.hasSession(label)) {
-          return;
-        }
+        'remotix.expandConnectionOnDoubleClick',
+        async (item: vscode.TreeItem) => {
+            const label = (item as any).connectionLabel || String(item.label);
 
-        const now = Date.now();
-        const lastClick = lastClickTimes.get(label) || 0;
-        lastClickTimes.set(label, now);
-
-        if (now - lastClick < 400) {
-          lastClickTimes.delete(label);
-
-          (treeDataProvider as any).allowExpandOnce = label;
-          const treeView = Container.get('treeView') as vscode.TreeView<vscode.TreeItem>;
-          if (treeView) {
-            item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-            treeDataProvider.refresh(item);
-            try {
-              await treeView.reveal(item, { 
-                select: true, 
-                focus: true, 
-                expand: true 
-              });
-            } catch (err) {
-              treeDataProvider.refresh(item);
+            if (SessionProvider.hasSession(label)) {
+                return;
             }
-          }
 
-          (treeDataProvider as any).allowExpandOnce = undefined;
+            if (DoubleClickHelper.isDoubleClick(label)) {
+                (treeDataProvider as any).allowExpandOnce = label;
+                const treeView = Container.get('treeView') as vscode.TreeView<vscode.TreeItem>;
+                
+                if (treeView) {
+                    item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                    treeDataProvider.refresh(item);
+                    try {
+                        await treeView.reveal(item, {
+                            select: true,
+                            focus: true,
+                            expand: true
+                        });
+                    } catch (err) {
+                        treeDataProvider.refresh(item);
+                    }
+                }
+
+                (treeDataProvider as any).allowExpandOnce = undefined;
+            }
         }
-      }
     );
 
     context.subscriptions.push(doubleClickCommand);
+
+    context.subscriptions.push(vscode.commands.registerCommand('remotix.elementDoubleClick', async (item: any) => {
+        if (!item) return;
+
+        const itemKey = (item as any).sshPath || (item as any).ftpPath || String(item.label);
+
+        if (DoubleClickHelper.isDoubleClick(itemKey)) {
+            await vscode.commands.executeCommand('remotix.editFile', item);
+        }
+    }));
 }

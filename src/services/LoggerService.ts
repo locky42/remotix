@@ -11,7 +11,7 @@ export class LoggerService {
     return LoggerService.outputChannel;
   }
 
-  static log(data: string, key?: string, type?: 'info' | 'error' | 'warning') {
+  static log(data: any, key?: string, type?: 'info' | 'error' | 'warning') {
     const logLevel = vscode.workspace.getConfiguration('remotix').get<string>('logLevel', 'error');
     if (logLevel === 'error' && type !== 'error') {
       return;

@@ -448,7 +448,7 @@ export class FtpRemoteService implements RemoteService {
               
               treeItem.iconPath = new vscode.ThemeIcon(iconName);
               treeItem.command = {
-                command: 'remotix.editFile',
+                command: 'remotix.elementDoubleClick',
                 title: LangService.t('openFile'),
                 arguments: [{
                   label: leafName,
@@ -487,18 +487,34 @@ export class FtpRemoteService implements RemoteService {
       defaultUri: vscode.Uri.file(homeDir)
     });
     if (!uri || uri.length === 0) return;
-    const localTarget = uri[0].fsPath;
-    try {
-      if (isDirectory) {
-        await this.downloadDir(item, localTarget);
-      } else {
-        await this.download(item, localTarget);
-      }
-      vscode.window.showInformationMessage(LangService.t('downloadSuccess'));
-      LoggerService.log(`END success type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`, 'FtpRemoteService', 'info');
+      const localTarget = uri[0].fsPath;
+      try {
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: LangService.t('downloading'),
+            cancellable: true
+        }, async (progress, token) => {
+            
+            token.onCancellationRequested(() => {
+                LoggerService.log('Download cancelled by user');
+                throw new Error('Cancelled');
+            });
+
+            if (isDirectory) {
+                await this.downloadDir(item, localTarget);
+            } else {
+                await this.download(item, localTarget);
+            }
+        });
+
+        vscode.window.showInformationMessage(LangService.t('downloadSuccess'));
+        LoggerService.log(`END success type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`, 'FtpRemoteService', 'info');
+
     } catch (err: any) {
-      LoggerService.log(`END fail type=${isDirectory ? 'directory' : 'file'} path=${selectedPath} error=${err?.message || String(err)}`, 'FtpRemoteService', 'error');
-      vscode.window.showErrorMessage(LangService.t('downloadError', { error: err.message }));
+        if (err.message !== 'Cancelled') {
+            LoggerService.log(`END fail type=${isDirectory ? 'directory' : 'file'} path=${selectedPath} error=${err?.message || String(err)}`, 'FtpRemoteService', 'error');
+            vscode.window.showErrorMessage(LangService.t('downloadError', { error: err.message }));
+        }
     }
   }
 
@@ -1276,48 +1292,61 @@ export class FtpRemoteService implements RemoteService {
         return;
       }
 
-      try {
-        if (treeDataProvider?.treeLocker) {
-          treeDataProvider.treeLocker.lock(LangService.t('downloadingFile'), this.connection.label);
-        }
+      await vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: LangService.t('downloading'),
+          cancellable: true
+      }, async (progress, token) => {
+          try {
+              if (treeDataProvider?.treeLocker) {
+                  treeDataProvider.treeLocker.lock(LangService.t('downloading'), this.connection.label);
+              }
 
-        await this.getRemoteFileEditService().openWithTempFile({
-          remotePath: ftpPath,
-          host: this.connection.host,
-          user: this.connection.user,
-          tmpFolderPrefix: 'remotix_ftp',
-          downloadToTemp: async (tmpFile) => {
-            const activeSession = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
-            if (!activeSession || (activeSession as any).closed) {
-              throw new Error('FTP session not initialized or connection closed');
-            }
+              token.onCancellationRequested(() => {
+                  LoggerService.log('Download cancelled by user');
+              });
 
-            LoggerService.log(`Downloading for edit: ${ftpPath} -> ${tmpFile}`);
-            await activeSession.downloadTo(tmpFile, ftpPath);
-          },
-          uploadFromTemp: async (tmpFile) => {
-            const session2 = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
-            if (!session2 || (session2 as any).closed) {
-              throw new Error('Connection lost');
-            }
+              await this.getRemoteFileEditService().openWithTempFile({
+                  remotePath: ftpPath,
+                  host: this.connection.host,
+                  user: this.connection.user,
+                  tmpFolderPrefix: 'remotix_ftp',
+                  downloadToTemp: async (tmpFile) => {
+                      if (token.isCancellationRequested) throw new Error('Cancelled');
+                      
+                      const activeSession = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
+                      if (!activeSession || (activeSession as any).closed) {
+                          throw new Error('FTP session not initialized or connection closed');
+                      }
+                      LoggerService.log(`Downloading for edit: ${ftpPath} -> ${tmpFile}`);
+                      await activeSession.downloadTo(tmpFile, ftpPath);
+                  },
+                  uploadFromTemp: async (tmpFile) => {
+                      const session2 = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
+                      if (!session2 || (session2 as any).closed) {
+                          throw new Error('Connection lost');
+                      }
 
-            LoggerService.log(`Uploading changes: ${tmpFile} -> ${ftpPath}`);
-            await session2.uploadFrom(tmpFile, ftpPath);
-          },
-          logCleanupError: (cleanupError) => {
-            LoggerService.log(`Temp file cleanup error: ${String(cleanupError)}`);
-          },
-        });
+                      LoggerService.log(`Uploading changes: ${tmpFile} -> ${ftpPath}`);
+                      await session2.uploadFrom(tmpFile, ftpPath);
+                  },
+                  logCleanupError: (cleanupError) => {
+                      LoggerService.log(`Temp file cleanup error: ${String(cleanupError)}`);
+                  },
+              });
 
-      } catch (e: any) {
-        const msg = e.message || String(e);
-        LoggerService.log(`editFile: ${msg}`, 'FtpRemoteService', 'error');
-        vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: msg }));
-      } finally {
-        if (treeDataProvider?.treeLocker) {
-          treeDataProvider.treeLocker.unlock();
-        }
-      }
+          } catch (e: any) {
+              if (e.message !== 'Cancelled') {
+                  const msg = e.message || String(e);
+                  LoggerService.log(`editFile: ${msg}`, 'FtpRemoteService', 'error');
+                  vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: msg }));
+              }
+          } finally {
+              if (treeDataProvider?.treeLocker) {
+                  treeDataProvider.treeLocker.unlock();
+              }
+          }
+      });
     });
   }
 

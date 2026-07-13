@@ -59,6 +59,7 @@
   "uploadSuccess": "Upload completed successfully!",
   "uploadInProgress": "Upload in progress. This connection tree is temporarily locked.",
   "downloadingFile": "Downloading file. This connection tree is temporarily locked.",
+  "downloading": "Downloading",
   "deleteInProgress": "Delete operation in progress. This connection tree is temporarily locked.",
   "moveSuccess": "Move completed successfully!",
   "moveError": "Failed to move: {error}",
