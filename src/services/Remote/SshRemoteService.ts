@@ -363,7 +363,7 @@ export class SshRemoteService implements RemoteService {
                                 item.resourceUri = vscode.Uri.file('/ssh/' + encodeURIComponent(this.connection.label) + fullPath);
                               } catch {}
                               item.command = {
-                                command: 'remotix.elementDoubleClick',
+                                command: 'tentacle.elementDoubleClick',
                                 title: LangService.t('openFile'),
                                 arguments: [{
                                   label: f.filename,
@@ -1449,7 +1449,7 @@ export class SshRemoteService implements RemoteService {
           remotePath: filePath,
           host: this.connection.host,
           user: this.connection.user,
-          tmpFolderPrefix: 'remotix',
+          tmpFolderPrefix: 'tentacle',
           downloadToTemp: async (tmpFile) => {
             const ssh = await SessionProvider.getSession<SshClient>(this.connection.label, this);
             if (!ssh) throw new Error(LangService.t('noConnectionsFound'));

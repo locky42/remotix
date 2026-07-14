@@ -12,7 +12,7 @@ import { RemoteServiceProvider } from './services/RemoteServiceProvider';
 import { RemoteFileEditService } from './services/RemoteFileEditService';
 
 function resolveLangFromSettings(): 'en' | 'uk' {
-  const configured = vscode.workspace.getConfiguration('remotix').get<string>('language', 'auto');
+  const configured = vscode.workspace.getConfiguration('tentacle').get<string>('language', 'auto');
   if (configured === 'en' || configured === 'uk') {
     return configured;
   }
@@ -21,7 +21,7 @@ function resolveLangFromSettings(): 'en' | 'uk' {
 }
 
 async function migrateLegacyLanguageSetting(): Promise<void> {
-  const config = vscode.workspace.getConfiguration('remotix');
+  const config = vscode.workspace.getConfiguration('tentacle');
   const configured = config.get<string>('language', 'auto');
   const normalized = String(configured || '').trim().toLowerCase();
 
@@ -83,7 +83,7 @@ export async function activate(context: vscode.ExtensionContext) {
   patchConnectionsWithPasswords();
   Container.set('treeDataProvider', treeDataProvider);
 
-  const treeView = vscode.window.createTreeView('remotixView', {
+  const treeView = vscode.window.createTreeView('tentacleView', {
     treeDataProvider,
     dragAndDropController: treeDataProvider
   });
@@ -92,7 +92,7 @@ export async function activate(context: vscode.ExtensionContext) {
   Container.set('treeView', treeView);
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
-    if (event.affectsConfiguration('remotix.language')) {
+    if (event.affectsConfiguration('tentacle.language')) {
       LangService.setLang(resolveLangFromSettings());
       treeDataProvider.refresh();
     }
@@ -107,7 +107,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register UI commands in a separate module
   registerUiCommands();
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.openSshTerminal', async (item: vscode.TreeItem) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.openSshTerminal', async (item: vscode.TreeItem) => {
     const connection = treeDataProvider.getConnectionByLabel(item.label as string);
     if (!connection || connection.type !== 'ssh') return;
     // Always fetch password from SecretStorage

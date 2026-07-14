@@ -1,17 +1,17 @@
 <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px;">
 <div style="flex: 1; min-width: 280px;">
 
-# Remotix 🚀
+# Tentacle 🚀
 
-**Remotix** is a powerful VS Code extension for managing remote servers via **SSH and FTP**, directly from the sidebar.
+**Tentacle** is a powerful VS Code extension for managing remote servers via **SSH and FTP**, directly from the sidebar.
 
 Control your infrastructure, edit files, and manage remote systems without leaving your editor.
 
-[![Version](https://vsmarketplacebadges.dev/version/locky42.remotix-extension.svg)](https://marketplace.visualstudio.com/items?itemName=locky42.remotix-extension)
-[![Installs](https://vsmarketplacebadges.dev/installs/locky42.remotix-extension.svg)](https://marketplace.visualstudio.com/items?itemName=locky42.remotix-extension)
-[![Rating](https://vsmarketplacebadges.dev/rating/locky42.remotix-extension.svg)](https://marketplace.visualstudio.com/items?itemName=locky42.remotix-extension)
-[![Release](https://img.shields.io/github/v/release/locky42/remotix?style=flat-square)](https://github.com/locky42/remotix/releases/latest)
-[![License](https://img.shields.io/github/license/locky42/remotix?style=flat-square)](https://github.com/locky42/remotix/blob/main/LICENSE)
+[![Version](https://vsmarketplacebadges.dev/version/locky42.tentacle.svg)](https://marketplace.visualstudio.com/items?itemName=locky42.tentacle)
+[![Installs](https://vsmarketplacebadges.dev/installs/locky42.tentacle.svg)](https://marketplace.visualstudio.com/items?itemName=locky42.tentacle)
+[![Rating](https://vsmarketplacebadges.dev/rating/locky42.tentacle.svg)](https://marketplace.visualstudio.com/items?itemName=locky42.tentacle)
+[![Release](https://img.shields.io/github/v/release/locky42/tentacle?style=flat-square)](https://github.com/locky42/tentacle/releases/latest)
+[![License](https://img.shields.io/github/license/locky42/tentacle?style=flat-square)](https://github.com/locky42/tentacle/blob/main/LICENSE)
 
 ---
 
@@ -57,7 +57,7 @@ Control your infrastructure, edit files, and manage remote systems without leavi
 
 </div>
 <div style="flex: 1; min-width: 280px; text-align: center;">
-<img src="media/screenshots/demo.gif" width="420" alt="Remotix Demo" />
+<img src="media/screenshots/demo.gif" width="420" alt="Tentacle Demo" />
 </div>
 </div>
 
@@ -65,7 +65,7 @@ Control your infrastructure, edit files, and manage remote systems without leavi
 
 ## 🔒 Security
 
-Remotix has undergone a major security overhaul starting from **v1.3.0** and received further hardening in **v1.3.3** to ensure your credentials are handled with professional-grade protection. We have fully migrated to the **VS Code Secret Storage API** and isolated password transmission during active connections.
+Tentacle has undergone a major security overhaul starting from **v1.3.0** and received further hardening in **v1.3.3** to ensure your credentials are handled with professional-grade protection. We have fully migrated to the **VS Code Secret Storage API** and isolated password transmission during active connections.
 
 ### 🛡️ OS-Level Encryption & Safe Transmission
 Your passwords are never stored in plain-text config files. Instead, they are encrypted and kept in your system's native secure vault:
@@ -73,10 +73,10 @@ Your passwords are never stored in plain-text config files. Instead, they are en
 - **Windows:** Credential Manager
 - **Linux:** Secret Service (via libsecret)
 
-Furthermore, when establishing connections via third-party utilities (like `sshpass`), Remotix completely isolates passwords within protected environment variables, ensuring they never leak as plain-text arguments in running system processes.
+Furthermore, when establishing connections via third-party utilities (like `sshpass`), Tentacle completely isolates passwords within protected environment variables, ensuring they never leak as plain-text arguments in running system processes.
 
 ### 🔄 Automatic Migration
-The transition is seamless. Upon updating, Remotix will **automatically move** your existing passwords to the secure storage the first time you connect to each server. No manual re-entry or reconfiguration is required.
+The transition is seamless. Upon updating, Tentacle will **automatically move** your existing passwords to the secure storage the first time you connect to each server. No manual re-entry or reconfiguration is required.
 
 ### 🔐 Controlled Access
 Only the extension itself can securely retrieve these secrets when establishing a connection, and you can securely view or copy your stored passwords directly from the UI if needed.
@@ -88,7 +88,7 @@ Your passwords are no longer stored in plain-text config files. Instead, they ar
 - **Linux:** Secret Service (via libsecret)
 
 ### 🔄 Automatic Migration
-The transition is seamless. Upon updating, Remotix will **automatically move** your existing passwords to the secure storage the first time you connect to each server. No manual re-entry or reconfiguration is required.
+The transition is seamless. Upon updating, Tentacle will **automatically move** your existing passwords to the secure storage the first time you connect to each server. No manual re-entry or reconfiguration is required.
 
 ### 🔐 Controlled Access
 Only the extension itself can securely retrieve these secrets when establishing a connection, and you can securely view or copy your stored passwords directly from the UI if needed.
@@ -111,21 +111,21 @@ Only the extension itself can securely retrieve these secrets when establishing 
 
 ---
 
-## 💎 Why Remotix?
+## 💎 Why Tentacle?
 
 * **🚀 Unified Workflow** — Stop switching between external apps like FileZilla or WinSCP. Browse, edit, and manage your remote infrastructure without ever leaving your editor tabs.
-* **🛡️ Invisible Security** — Your credentials are safe. By leveraging the **VS Code Secret Storage API**, Remotix keeps your passwords in your system's secure vault (Keychain/Credential Manager), never in plain-text configs.
+* **🛡️ Invisible Security** — Your credentials are safe. By leveraging the **VS Code Secret Storage API**, Tentacle keeps your passwords in your system's secure vault (Keychain/Credential Manager), never in plain-text configs.
 * **⚡ Native Performance** — Built specifically for VS Code. Experience smooth tree rendering, smart breadcrumbs, and multi-threaded transfers that scale with your hardware.
 * **📂 Full File Control** — Go beyond simple uploads. Manage **permissions (chmod)**, view detailed **metadata**, and use a built-in **SSH terminal** for advanced tasks.
 * **📥 Instant Onboarding** — Don't start from scratch. Import your entire server list from `~/.ssh/config` or your existing **FileZilla** profiles in one click.
 * **🏗️ Scalable Infrastructure** — Manage complex environments easily. Keep your project-specific servers tied to their repositories while having your main dev servers accessible globally.
-* **⚡ True Multi-tasking** — Remotix doesn't limit you to one active session. Monitor logs on one server while editing files on another and uploading assets to a third — all at the same time.
+* **⚡ True Multi-tasking** — Tentacle doesn't limit you to one active session. Monitor logs on one server while editing files on another and uploading assets to a third — all at the same time.
 
 ---
 
 ## 🧭 How to Use
 
-1. **Open Remotix**: Click the Remotix icon in the VS Code Activity Bar (sidebar).
+1. **Open Tentacle**: Click the Tentacle icon in the VS Code Activity Bar (sidebar).
 2. **Add Connections**: Click **"Add Connection"** or use the **"More Actions"** menu to import hosts from SSH config or FileZilla.
    > **💡 Pro Tip:** You can choose to save each connection **Globally** (available in any VS Code window) or **Project-specific** (tied only to your current workspace).
 3. **Browse Files**: Expand any server in the list to explore remote directories in a familiar tree view.
@@ -137,14 +137,14 @@ Only the extension itself can securely retrieve these secrets when establishing 
 
 ## ⚙️ Configuration
 
-Remotix is designed to be easily customized via the VS Code Settings UI.
+Tentacle is designed to be easily customized via the VS Code Settings UI.
 
 ### 🛠️ Quick Access
-You can open the settings page directly by clicking the **Gear Icon (⚙️)** at the top of the Remotix sidebar panel.
+You can open the settings page directly by clicking the **Gear Icon (⚙️)** at the top of the Tentacle sidebar panel.
 
 Alternatively:
 1. Press `Ctrl + ,` (or `Cmd + ,` on macOS).
-2. Search for `@ext:locky42.remotix-extension`.
+2. Search for `@ext:locky42.tentacle`.
 
 ### 🎛️ Available Options
 
@@ -210,18 +210,18 @@ Fine-tune your experience via VS Code settings. Adjust concurrency for faster tr
 
 ---
 
-## 📖 The Story Behind Remotix
+## 📖 The Story Behind Tentacle
 
-**Remotix was born out of pure frustration.**
+**Tentacle was born out of pure frustration.**
 
 While working on **Linux Mint**, I found that existing FTP/SSH clients were either clunky, unstable, or simply felt like they belonged in the early 2000s. I didn't want a heavy standalone app like FileZilla — I wanted a tool that treats remote servers with the same respect as local folders, right inside my editor.
 
 ### The Evolution
 What started as a practical replacement for unstable tools has grown into a professional workflow. The mission was to create something that **just works** — no crashes during large transfers, no fragmented UI, just a clean integration with VS Code.
 
-With the **v1.3.0 release**, Remotix has reached a new level of maturity. By migrating from plain-text configurations to the **VS Code Secret Storage API**, the project has evolved from a personal helper into a robust, secure extension built for professional environments.
+With the **v1.3.0 release**, Tentacle has reached a new level of maturity. By migrating from plain-text configurations to the **VS Code Secret Storage API**, the project has evolved from a personal helper into a robust, secure extension built for professional environments.
 
-Remotix is my daily driver, and I’m committed to keeping it the most straightforward and secure way to manage your servers.
+Tentacle is my daily driver, and I’m committed to keeping it the most straightforward and secure way to manage your servers.
 
 ---
 
@@ -233,4 +233,4 @@ MIT License — free to use, modify, and distribute.
 
 ## 🚀 Summary
 
-Remotix brings fast, secure, and seamless remote server management directly into VS Code — without leaving your editor.
+Tentacle brings fast, secure, and seamless remote server management directly into VS Code — without leaving your editor.

@@ -59,7 +59,7 @@ function resolveConnectionItem(item: any): ConnectionItem | undefined {
 export function registerFileFolderCommands() {
   const context = Container.get('extensionContext') as vscode.ExtensionContext;
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.download', async (item: any) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.download', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -73,7 +73,7 @@ export function registerFileFolderCommands() {
     await service.downloadWithDialogs?.(item);
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.downloadFolderArchive', async (item: any) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.downloadFolderArchive', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -92,7 +92,7 @@ export function registerFileFolderCommands() {
     await service.downloadFolderArchiveWithDialogs(item);
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.upload', async (item: any) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.upload', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -105,7 +105,7 @@ export function registerFileFolderCommands() {
     await service.uploadWithDialogs?.(item);
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.editFile', async (item: ConnectionItem) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.editFile', async (item: ConnectionItem) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -118,7 +118,7 @@ export function registerFileFolderCommands() {
     await service.editFileWithDialogs?.(item);
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.rename', async (item: ConnectionItem) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.rename', async (item: ConnectionItem) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -131,7 +131,7 @@ export function registerFileFolderCommands() {
     await service.renameWithDialogs?.(item);
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.changePermissions', async (item: any) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.changePermissions', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -150,7 +150,7 @@ export function registerFileFolderCommands() {
     await service.changePermissionsWithDialogs(item);
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.showProperties', async (item: any) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.showProperties', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -169,7 +169,7 @@ export function registerFileFolderCommands() {
     await service.showPropertiesWithDialogs(item);
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.createFolder', async (item: any) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.createFolder', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -182,7 +182,7 @@ export function registerFileFolderCommands() {
     await service.createFolderWithDialogs?.(item);
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.createFile', async (item: any) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.createFile', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -195,7 +195,7 @@ export function registerFileFolderCommands() {
     await service.createFileWithDialogs?.(item);
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.deleteFile', async (item: any) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.deleteFile', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -208,7 +208,7 @@ export function registerFileFolderCommands() {
     await service.deleteWithDialogs?.(item);
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.copyItem', async (item: any) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.copyItem', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -242,7 +242,7 @@ export function registerFileFolderCommands() {
     );
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.pasteItem', async (item: any) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.pasteItem', async (item: any) => {
     const connection = resolveConnectionItem(item);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
@@ -377,7 +377,7 @@ export function registerFileFolderCommands() {
     }
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.copyPath', async (item: any) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.copyPath', async (item: any) => {
     if (!item) {
       vscode.window.showErrorMessage(LangService.t('itemNotSelected'));
       return;

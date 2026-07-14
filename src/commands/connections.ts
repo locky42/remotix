@@ -31,7 +31,7 @@ export function registerConnectionCommands(saveConnection: Function) {
   const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
   const connectionManager = Container.get('connectionManager') as ConnectionManager;
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.importFileZilla', async () => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.importFileZilla', async () => {
     try {
       const defaultPaths = [
         path.join(process.env.HOME || process.env.USERPROFILE || '.', '.config', 'filezilla', 'sitemanager.xml'),
@@ -230,7 +230,7 @@ export function registerConnectionCommands(saveConnection: Function) {
     }
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.importSshConfig', async () => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.importSshConfig', async () => {
     try {
       const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
       const uris = await vscode.window.showOpenDialog({
@@ -351,9 +351,9 @@ export function registerConnectionCommands(saveConnection: Function) {
     }
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.addConnection', async () => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.addConnection', async () => {
     const panel = vscode.window.createWebviewPanel(
-      'remotixAddConnection',
+      'tentacleAddConnection',
       LangService.t('addConnection'),
       vscode.ViewColumn.One,
       { enableScripts: true }
@@ -388,12 +388,12 @@ export function registerConnectionCommands(saveConnection: Function) {
     );
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.editConnection', async (item: vscode.TreeItem) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.editConnection', async (item: vscode.TreeItem) => {
     const label = (item as any).connectionLabel || String(item.label);
     const connection = treeDataProvider.getConnectionByLabel(label);
     if (!connection) return;
     const panel = vscode.window.createWebviewPanel(
-      'remotixEditConnection',
+      'tentacleEditConnection',
       LangService.t('editConnection'),
       vscode.ViewColumn.One,
       { enableScripts: true }
@@ -481,7 +481,7 @@ export function registerConnectionCommands(saveConnection: Function) {
     );
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.deleteConnection', async (item: vscode.TreeItem) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.deleteConnection', async (item: vscode.TreeItem) => {
     const label = (item as any).connectionLabel || String(item.label);
     const connection = treeDataProvider.getConnectionByLabel(label);
     if (!connection) return;
@@ -510,7 +510,7 @@ export function registerConnectionCommands(saveConnection: Function) {
     vscode.window.showInformationMessage(LangService.t('connectionDeleted', { label }));
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('remotix.closeConnection', async (item: vscode.TreeItem) => {
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.closeConnection', async (item: vscode.TreeItem) => {
     const label = (item as any).connectionLabel || String(item.label);
     if (!label) {
       return;

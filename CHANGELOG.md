@@ -95,7 +95,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- `remotix.copyPath` command registration and execution (`command not found` issue).
+- `tentacle.copyPath` command registration and execution (`command not found` issue).
 - Persistent FTP copy status display during recursive transfers.
 
 ## [1.0.0] - 2026-04-05
@@ -117,7 +117,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Initial public release of Remotix.
+- Initial public release of Tentacle.
 - SSH and FTP connection management.
 - Remote file tree browsing and file operations.
 - Upload/download support and inline tree actions.

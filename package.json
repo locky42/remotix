@@ -1,18 +1,18 @@
 {
-  "name": "remotix-extension",
+  "name": "tentacle",
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
   "version": "1.3.3",
   "publisher": "locky42",
   "repository": {
     "type": "git",
-    "url": "https://github.com/locky42/remotix.git"
+    "url": "https://github.com/locky42/tentacle.git"
   },
-  "homepage": "https://github.com/locky42/remotix#readme",
+  "homepage": "https://github.com/locky42/tentacle#readme",
   "bugs": {
-    "url": "https://github.com/locky42/remotix/issues"
+    "url": "https://github.com/locky42/tentacle/issues"
   },
-  "icon": "media/remotix-icon.png",
+  "icon": "media/Tentacle-icon-128x128.png",
   "engines": {
     "vscode": ">=1.70.0"
   },
@@ -27,150 +27,150 @@
     "file-manager"
   ],
   "activationEvents": [
-    "onCommand:remotix.moreActions",
-    "onCommand:remotix.importSshConfig",
-    "onCommand:remotix.addConnection",
-    "onCommand:remotix.editConnection",
-    "onCommand:remotix.openSshTerminal",
-    "onCommand:remotix.upload",
-    "onCommand:remotix.editFile",
-    "onCommand:remotix.deleteFile",
-    "onCommand:remotix.rename",
-    "onCommand:remotix.copyPath",
-    "onCommand:remotix.importFileZilla",
-    "onCommand:remotix.deleteConnection",
-    "onCommand:remotix.closeConnection",
-    "onCommand:remotix.setLanguage",
-    "onCommand:remotix.openSettings",
-    "onCommand:remotix.createFile",
-    "onCommand:remotix.createFolder",
-    "onCommand:remotix.refresh",
-    "onCommand:remotix.copyItem",
-    "onCommand:remotix.pasteItem",
-    "onCommand:remotix.changePermissions",
-    "onCommand:remotix.showProperties",
-    "onCommand:remotix.downloadFolderArchive"
+    "onCommand:tentacle.moreActions",
+    "onCommand:tentacle.importSshConfig",
+    "onCommand:tentacle.addConnection",
+    "onCommand:tentacle.editConnection",
+    "onCommand:tentacle.openSshTerminal",
+    "onCommand:tentacle.upload",
+    "onCommand:tentacle.editFile",
+    "onCommand:tentacle.deleteFile",
+    "onCommand:tentacle.rename",
+    "onCommand:tentacle.copyPath",
+    "onCommand:tentacle.importFileZilla",
+    "onCommand:tentacle.deleteConnection",
+    "onCommand:tentacle.closeConnection",
+    "onCommand:tentacle.setLanguage",
+    "onCommand:tentacle.openSettings",
+    "onCommand:tentacle.createFile",
+    "onCommand:tentacle.createFolder",
+    "onCommand:tentacle.refresh",
+    "onCommand:tentacle.copyItem",
+    "onCommand:tentacle.pasteItem",
+    "onCommand:tentacle.changePermissions",
+    "onCommand:tentacle.showProperties",
+    "onCommand:tentacle.downloadFolderArchive"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "remotix.expandConnectionOnDoubleClick",
+        "command": "tentacle.expandConnectionOnDoubleClick",
         "title": "Expand Connection"
       },
       {
-        "command": "remotix.addConnection",
+        "command": "tentacle.addConnection",
         "title": "%command.addConnection%",
         "icon": "$(add)"
       },
       {
-        "command": "remotix.editConnection",
+        "command": "tentacle.editConnection",
         "title": "%command.editConnection%",
         "icon": "$(edit)"
       },
       {
-        "command": "remotix.deleteConnection",
+        "command": "tentacle.deleteConnection",
         "title": "%command.deleteConnection%",
         "icon": "$(trash)"
       },
       {
-        "command": "remotix.closeConnection",
+        "command": "tentacle.closeConnection",
         "title": "%command.closeConnection%",
         "icon": "$(debug-disconnect)"
       },
       {
-        "command": "remotix.openSshTerminal",
+        "command": "tentacle.openSshTerminal",
         "title": "%command.openSshTerminal%",
         "icon": "$(terminal)"
       },
       {
-        "command": "remotix.editFile",
+        "command": "tentacle.editFile",
         "title": "%command.editFile%",
         "icon": "$(edit)"
       },
       {
-        "command": "remotix.upload",
+        "command": "tentacle.upload",
         "title": "%command.upload%",
         "icon": "$(cloud-upload)"
       },
       {
-        "command": "remotix.download",
+        "command": "tentacle.download",
         "title": "%command.download%",
         "icon": "$(cloud-download)"
       },
       {
-        "command": "remotix.downloadFolderArchive",
+        "command": "tentacle.downloadFolderArchive",
         "title": "%command.downloadFolderArchive%",
         "icon": "$(package)"
       },
       {
-        "command": "remotix.rename",
+        "command": "tentacle.rename",
         "title": "%command.rename%",
         "icon": "$(edit)"
       },
       {
-        "command": "remotix.deleteFile",
+        "command": "tentacle.deleteFile",
         "title": "%command.deleteFile%",
         "icon": "$(trash)"
       },
       {
-        "command": "remotix.copyPath",
+        "command": "tentacle.copyPath",
         "title": "%command.copyPath%"
       },
       {
-        "command": "remotix.importSshConfig",
+        "command": "tentacle.importSshConfig",
         "title": "%command.importSshConfig%"
       },
       {
-        "command": "remotix.importFileZilla",
+        "command": "tentacle.importFileZilla",
         "title": "%command.importFileZilla%"
       },
       {
-        "command": "remotix.setLanguage",
+        "command": "tentacle.setLanguage",
         "title": "%command.setLanguage%",
         "icon": "$(globe)"
       },
       {
-        "command": "remotix.openSettings",
+        "command": "tentacle.openSettings",
         "title": "%command.openSettings%",
         "icon": "$(settings-gear)"
       },
       {
-        "command": "remotix.moreActions",
+        "command": "tentacle.moreActions",
         "title": "..."
       },
       {
-        "command": "remotix.createFile",
+        "command": "tentacle.createFile",
         "title": "%command.createFile%",
         "icon": "$(new-file)"
       },
       {
-        "command": "remotix.createFolder",
+        "command": "tentacle.createFolder",
         "title": "%command.createFolder%",
         "icon": "$(new-folder)"
       },
       {
-        "command": "remotix.refresh",
+        "command": "tentacle.refresh",
         "title": "%command.refresh%",
         "icon": "$(refresh)"
       },
       {
-        "command": "remotix.copyItem",
+        "command": "tentacle.copyItem",
         "title": "%command.copyItem%",
         "icon": "$(copy)"
       },
       {
-        "command": "remotix.pasteItem",
+        "command": "tentacle.pasteItem",
         "title": "%command.pasteItem%",
         "icon": "$(clippy)"
       },
       {
-        "command": "remotix.changePermissions",
+        "command": "tentacle.changePermissions",
         "title": "%command.changePermissions%",
         "icon": "$(settings-gear)"
       },
       {
-        "command": "remotix.showProperties",
+        "command": "tentacle.showProperties",
         "title": "%command.showProperties%",
         "icon": "$(info)"
       }
@@ -178,159 +178,159 @@
     "menus": {
       "view/title": [
         {
-          "command": "remotix.addConnection",
-          "when": "view == remotixView",
+          "command": "tentacle.addConnection",
+          "when": "view == tentacleView",
           "group": "navigation@1"
         },
         {
-          "command": "remotix.openSettings",
-          "when": "view == remotixView",
+          "command": "tentacle.openSettings",
+          "when": "view == tentacleView",
           "group": "navigation@2",
           "icon": "$(settings-gear)"
         },
         {
-          "command": "remotix.moreActions",
-          "when": "view == remotixView",
+          "command": "tentacle.moreActions",
+          "when": "view == tentacleView",
           "group": "navigation@3",
           "icon": "$(ellipsis)"
         }
       ],
       "view/item/context": [
         {
-          "command": "remotix.refresh",
-          "when": "view == remotixView && (viewItem == ssh-folder || viewItem == ftp-folder || viewItem == connection || viewItem == connection-active)",
+          "command": "tentacle.refresh",
+          "when": "view == tentacleView && (viewItem == ssh-folder || viewItem == ftp-folder || viewItem == connection || viewItem == connection-active)",
           "group": "inline",
           "icon": "$(refresh)"
         },
         {
-          "command": "remotix.closeConnection",
-          "when": "view == remotixView && (viewItem == connection || viewItem == connection-active)",
+          "command": "tentacle.closeConnection",
+          "when": "view == tentacleView && (viewItem == connection || viewItem == connection-active)",
           "group": "inline",
           "icon": "$(debug-disconnect)"
         },
         {
-          "command": "remotix.createFile",
-          "when": "view == remotixView && (viewItem == ssh-folder || viewItem == ssh-file)",
+          "command": "tentacle.createFile",
+          "when": "view == tentacleView && (viewItem == ssh-folder || viewItem == ssh-file)",
           "group": "0_create@1"
         },
         {
-          "command": "remotix.createFolder",
-          "when": "view == remotixView && (viewItem == ssh-folder || viewItem == ssh-file)",
+          "command": "tentacle.createFolder",
+          "when": "view == tentacleView && (viewItem == ssh-folder || viewItem == ssh-file)",
           "group": "0_create@2"
         },
         {
-          "command": "remotix.editFile",
-          "when": "view == remotixView && viewItem == ssh-file",
+          "command": "tentacle.editFile",
+          "when": "view == tentacleView && viewItem == ssh-file",
           "group": "0_edit_file@0"
         },
         {
-          "command": "remotix.openSshTerminal",
-          "when": "view == remotixView && (viewItem == connection || viewItem == connection-active)",
+          "command": "tentacle.openSshTerminal",
+          "when": "view == tentacleView && (viewItem == connection || viewItem == connection-active)",
           "group": "navigation"
         },
         {
-          "command": "remotix.editConnection",
-          "when": "view == remotixView && (viewItem == connection || viewItem == connection-active)",
+          "command": "tentacle.editConnection",
+          "when": "view == tentacleView && (viewItem == connection || viewItem == connection-active)",
           "group": "1_connection"
         },
         {
-          "command": "remotix.closeConnection",
-          "when": "view == remotixView && (viewItem == connection || viewItem == connection-active)",
+          "command": "tentacle.closeConnection",
+          "when": "view == tentacleView && (viewItem == connection || viewItem == connection-active)",
           "group": "1_connection"
         },
         {
-          "command": "remotix.copyPath",
-          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder || viewItem == ftp-file || viewItem == ftp-folder)",
+          "command": "tentacle.copyPath",
+          "when": "view == tentacleView && (viewItem == ssh-file || viewItem == ssh-folder || viewItem == ftp-file || viewItem == ftp-folder)",
           "group": "2_path"
         },
         {
-          "command": "remotix.showProperties",
-          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder)",
+          "command": "tentacle.showProperties",
+          "when": "view == tentacleView && (viewItem == ssh-file || viewItem == ssh-folder)",
           "group": "2_path@2"
         },
         {
-          "command": "remotix.copyItem",
-          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder || viewItem == ftp-file || viewItem == ftp-folder)",
+          "command": "tentacle.copyItem",
+          "when": "view == tentacleView && (viewItem == ssh-file || viewItem == ssh-folder || viewItem == ftp-file || viewItem == ftp-folder)",
           "group": "4_modification@0"
         },
         {
-          "command": "remotix.pasteItem",
-          "when": "view == remotixView && (viewItem == ssh-folder || viewItem == ftp-folder)",
+          "command": "tentacle.pasteItem",
+          "when": "view == tentacleView && (viewItem == ssh-folder || viewItem == ftp-folder)",
           "group": "4_modification@0"
         },
         {
-          "command": "remotix.upload",
-          "when": "view == remotixView && viewItem == ssh-folder",
+          "command": "tentacle.upload",
+          "when": "view == tentacleView && viewItem == ssh-folder",
           "group": "3_transfer@3"
         },
         {
-          "command": "remotix.upload",
-          "when": "view == remotixView && viewItem == ftp-folder",
+          "command": "tentacle.upload",
+          "when": "view == tentacleView && viewItem == ftp-folder",
           "group": "3_transfer@3"
         },
         {
-          "command": "remotix.download",
-          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder || viewItem == ftp-file || viewItem == ftp-folder)",
+          "command": "tentacle.download",
+          "when": "view == tentacleView && (viewItem == ssh-file || viewItem == ssh-folder || viewItem == ftp-file || viewItem == ftp-folder)",
           "group": "3_transfer@1"
         },
         {
-          "command": "remotix.downloadFolderArchive",
-          "when": "view == remotixView && viewItem == ssh-folder",
+          "command": "tentacle.downloadFolderArchive",
+          "when": "view == tentacleView && viewItem == ssh-folder",
           "group": "3_transfer@2"
         },
         {
-          "command": "remotix.rename",
-          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder)",
+          "command": "tentacle.rename",
+          "when": "view == tentacleView && (viewItem == ssh-file || viewItem == ssh-folder)",
           "group": "4_modification@1"
         },
         {
-          "command": "remotix.changePermissions",
-          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder)",
+          "command": "tentacle.changePermissions",
+          "when": "view == tentacleView && (viewItem == ssh-file || viewItem == ssh-folder)",
           "group": "5_permissions@1"
         },
         {
-          "command": "remotix.deleteFile",
-          "when": "view == remotixView && (viewItem == ssh-file || viewItem == ssh-folder)",
+          "command": "tentacle.deleteFile",
+          "when": "view == tentacleView && (viewItem == ssh-file || viewItem == ssh-folder)",
           "group": "4_modification@3"
         },
         {
-          "command": "remotix.deleteConnection",
-          "when": "view == remotixView && (viewItem == connection || viewItem == connection-active)",
+          "command": "tentacle.deleteConnection",
+          "when": "view == tentacleView && (viewItem == connection || viewItem == connection-active)",
           "group": "4_modification@3"
         },
         {
-          "command": "remotix.createFile",
-          "when": "view == remotixView && (viewItem == ftp-folder || viewItem == ftp-file)",
+          "command": "tentacle.createFile",
+          "when": "view == tentacleView && (viewItem == ftp-folder || viewItem == ftp-file)",
           "group": "0_create@1"
         },
         {
-          "command": "remotix.createFolder",
-          "when": "view == remotixView && (viewItem == ftp-folder || viewItem == ftp-file)",
+          "command": "tentacle.createFolder",
+          "when": "view == tentacleView && (viewItem == ftp-folder || viewItem == ftp-file)",
           "group": "0_create@2"
         },
         {
-          "command": "remotix.editFile",
-          "when": "view == remotixView && viewItem == ftp-file",
+          "command": "tentacle.editFile",
+          "when": "view == tentacleView && viewItem == ftp-file",
           "group": "0_edit_file@1"
         },
         {
-          "command": "remotix.rename",
-          "when": "view == remotixView && (viewItem == ftp-file || viewItem == ftp-folder)",
+          "command": "tentacle.rename",
+          "when": "view == tentacleView && (viewItem == ftp-file || viewItem == ftp-folder)",
           "group": "4_modification@1"
         },
         {
-          "command": "remotix.showProperties",
-          "when": "view == remotixView && (viewItem == ftp-file || viewItem == ftp-folder)",
+          "command": "tentacle.showProperties",
+          "when": "view == tentacleView && (viewItem == ftp-file || viewItem == ftp-folder)",
           "group": "2_path@2"
         },
         {
-          "command": "remotix.changePermissions",
-          "when": "view == remotixView && (viewItem == ftp-file || viewItem == ftp-folder)",
+          "command": "tentacle.changePermissions",
+          "when": "view == tentacleView && (viewItem == ftp-file || viewItem == ftp-folder)",
           "group": "5_permissions@1"
         },
         {
-          "command": "remotix.deleteFile",
-          "when": "view == remotixView && (viewItem == ftp-file || viewItem == ftp-folder)",
+          "command": "tentacle.deleteFile",
+          "when": "view == tentacleView && (viewItem == ftp-file || viewItem == ftp-folder)",
           "group": "4_modification@3"
         }
       ]
@@ -338,7 +338,7 @@
     "configuration": {
       "title": "%config.title%",
       "properties": {
-        "remotix.language": {
+        "tentacle.language": {
           "type": "string",
           "default": "auto",
           "order": 1,
@@ -354,7 +354,7 @@
           ],
           "description": "%config.language.description%"
         },
-        "remotix.ftpUploadConcurrency": {
+        "tentacle.ftpUploadConcurrency": {
           "type": "number",
           "default": 3,
           "order": 3,
@@ -362,7 +362,7 @@
           "maximum": 10,
           "description": "%config.ftpUploadConcurrency.description%"
         },
-        "remotix.ftpDownloadConcurrency": {
+        "tentacle.ftpDownloadConcurrency": {
           "type": "number",
           "default": 3,
           "order": 2,
@@ -370,7 +370,7 @@
           "maximum": 10,
           "description": "%config.ftpDownloadConcurrency.description%"
         },
-        "remotix.sshUploadConcurrency": {
+        "tentacle.sshUploadConcurrency": {
           "type": "number",
           "default": 3,
           "order": 5,
@@ -378,7 +378,7 @@
           "maximum": 10,
           "description": "%config.sshUploadConcurrency.description%"
         },
-        "remotix.sshDownloadConcurrency": {
+        "tentacle.sshDownloadConcurrency": {
           "type": "number",
           "default": 4,
           "order": 4,
@@ -386,7 +386,7 @@
           "maximum": 10,
           "description": "%config.sshDownloadConcurrency.description%"
         },
-        "remotix.logLevel": {
+        "tentacle.logLevel": {
           "type": "string",
           "default": "error",
           "order": 6,
@@ -405,25 +405,25 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "remotix-activitybar",
+          "id": "tentacle-activitybar",
           "title": "%view.container.title%",
-          "icon": "media/remotix-icon.svg"
+          "icon": "media/Tentacle-icon-32x32.png"
         }
       ]
     },
     "views": {
-      "remotix-activitybar": [
+      "tentacle-activitybar": [
         {
-          "id": "remotixView",
+          "id": "tentacleView",
           "name": "%view.panel.name%",
-          "icon": "media/remotix-icon.svg",
+          "icon": "media/Tentacle-icon-32x32.png",
           "dragAndDropController": true
         }
       ]
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile && npm run copy-static",
+    "vscode:prepublish": "npm run copy-static && npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",

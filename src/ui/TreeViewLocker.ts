@@ -46,9 +46,9 @@ export class TreeViewLocker {
       return;
     }
     const now = Date.now();
-    const message = this._lockMessage || 'Remotix: tree is temporarily locked by an active operation.';
+    const message = this._lockMessage || 'Tentacle: tree is temporarily locked by an active operation.';
 
-    vscode.window.setStatusBarMessage(`Remotix: ${message}`, 2500);
+    vscode.window.setStatusBarMessage(`Tentacle: ${message}`, 2500);
 
     if (now - this._lastNotifyTs > 5000) {
       this._lastNotifyTs = now;

@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { Container } from './Container';
-import { RemotixConfig } from '../types';
+import { TentacleConfig } from '../types';
 
 export class ConfigService {
   static getConcurrencyLimit(settingKey: string, defaultValue: number, min: number = 1, max: number = 10): number {
-    const configured = vscode.workspace.getConfiguration('remotix').get<number>(settingKey, defaultValue);
+    const configured = vscode.workspace.getConfiguration('tentacle').get<number>(settingKey, defaultValue);
     const numeric = Number(configured);
     const fallback = Number(defaultValue);
     const value = Number.isFinite(numeric) ? numeric : fallback;
@@ -64,7 +64,7 @@ export class ConfigService {
   static async storePassword(label: string, password: string) {
     const context = Container.get('extensionContext') as vscode.ExtensionContext;
     if (label && password) {
-      await context.secrets.store(`remotix:password:${label}`, password);
+      await context.secrets.store(`tentacle:password:${label}`, password);
     }
   }
 
@@ -74,7 +74,7 @@ export class ConfigService {
   static async getPassword(label: string): Promise<string | undefined> {
     const context = Container.get('extensionContext') as vscode.ExtensionContext;
     if (!label) return undefined;
-    const exact = await context.secrets.get(`remotix:password:${label}`);
+    const exact = await context.secrets.get(`tentacle:password:${label}`);
     if (exact) {
       return exact;
     }
@@ -92,7 +92,7 @@ export class ConfigService {
     }
 
     for (const candidate of candidates) {
-      const value = await context.secrets.get(`remotix:password:${candidate}`);
+      const value = await context.secrets.get(`tentacle:password:${candidate}`);
       if (value) {
         return value;
       }
@@ -107,7 +107,7 @@ export class ConfigService {
   static async deletePassword(label: string) {
     const context = Container.get('extensionContext') as vscode.ExtensionContext;
     if (label) {
-      await context.secrets.delete(`remotix:password:${label}`);
+      await context.secrets.delete(`tentacle:password:${label}`);
     }
   }
 
@@ -129,7 +129,7 @@ export class ConfigService {
   /**
    * Loads global config, excluding passwords (passwords are managed in SecretStorage).
    */
-  static getGlobalConfig(): RemotixConfig {
+  static getGlobalConfig(): TentacleConfig {
     const configPath = ConfigService.getGlobalConfigPath();
     if (fs.existsSync(configPath)) {
       const raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -146,7 +146,7 @@ export class ConfigService {
   /**
    * Saves global config, excluding passwords (passwords are managed in SecretStorage).
    */
-  static saveGlobalConfig(config: RemotixConfig) {
+  static saveGlobalConfig(config: TentacleConfig) {
     const configPath = ConfigService.getGlobalConfigPath();
     const sanitized = {
       ...config,
@@ -162,13 +162,13 @@ export class ConfigService {
     const context = Container.get('extensionContext') as vscode.ExtensionContext;
     const dir = context.globalStorageUri.fsPath;
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    return path.join(dir, 'remotix-connections.json');
+    return path.join(dir, 'tentacle-connections.json');
   }
 
   /**
    * Loads project config, excluding passwords (passwords are managed in SecretStorage).
    */
-  static getProjectConfig(): RemotixConfig {
+  static getProjectConfig(): TentacleConfig {
     const configPath = ConfigService.getProjectConfigPath();
     if (fs.existsSync(configPath)) {
       const raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -185,7 +185,7 @@ export class ConfigService {
   /**
    * Saves project config, excluding passwords (passwords are managed in SecretStorage).
    */
-  static saveProjectConfig(config: RemotixConfig) {
+  static saveProjectConfig(config: TentacleConfig) {
     const configPath = ConfigService.getProjectConfigPath();
     const sanitized = {
       ...config,
@@ -199,7 +199,7 @@ export class ConfigService {
 
   private static getProjectConfigPath() {
     const wsFolders = vscode.workspace.workspaceFolders;
-    if (!wsFolders || wsFolders.length === 0) return '.remotix-connections.json';
-    return path.join(wsFolders[0].uri.fsPath, '.remotix-connections.json');
+    if (!wsFolders || wsFolders.length === 0) return '.tentacle-connections.json';
+    return path.join(wsFolders[0].uri.fsPath, '.tentacle-connections.json');
   }
 }

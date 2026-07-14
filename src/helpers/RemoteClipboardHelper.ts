@@ -3,7 +3,7 @@ import { RemoteClipboard } from '../types';
 import { RemotePathHelper } from './RemotePathHelper';
 
 export class RemoteClipboardHelper {
-  private static readonly REMOTIX_CLIPBOARD_PREFIX = 'remotix-clipboard:';
+  private static readonly REMOTIX_CLIPBOARD_PREFIX = 'tentacle-clipboard:';
 
   static serializeRemoteClipboard(payload: RemoteClipboard): string {
     return `${RemoteClipboardHelper.REMOTIX_CLIPBOARD_PREFIX}${encodeURIComponent(JSON.stringify(payload))}`;

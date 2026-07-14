@@ -44,7 +44,7 @@ export interface ConnectionItem {
   client?: FtpClient | SshClient;
 }
 
-export interface RemotixConfig {
+export interface TentacleConfig {
   connections: ConnectionItem[];
 }
 

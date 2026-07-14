@@ -106,7 +106,7 @@
   "connectionClosed": "Connection '{label}' closed.",
   "connectionDeleted": "Connection '{label}' deleted.",
   "extensionActivated": "Extension activated",
-  "renameClicked": "Remotix: Rename clicked for {label}",
+  "renameClicked": "Tentacle: Rename clicked for {label}",
   "missingSshPathOrConnectionLabel": "Missing sshPath or connectionLabel",
   "connectionNotFound": "Connection not found",
   "renameFailed": "Rename failed: {error}",
@@ -181,7 +181,7 @@
   "remotePathMissing": "Remote path is missing",
   "ftpSessionNotInitializedOrClosed": "FTP session not initialized or connection closed",
   "ftpSessionNotInitialized": "FTP session not initialized",
-  "downloadProgressStatus": "Remotix: Downloaded {downloaded}/{total} items",
+  "downloadProgressStatus": "Tentacle: Downloaded {downloaded}/{total} items",
   "moveFailed": "Move failed: {error}",
   "itemsMovedSuccessfully": "Items moved successfully",
   "sshpassNotFound": "sshpass not found."

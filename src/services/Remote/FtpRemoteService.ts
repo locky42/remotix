@@ -448,7 +448,7 @@ export class FtpRemoteService implements RemoteService {
               
               treeItem.iconPath = new vscode.ThemeIcon(iconName);
               treeItem.command = {
-                command: 'remotix.elementDoubleClick',
+                command: 'tentacle.elementDoubleClick',
                 title: LangService.t('openFile'),
                 arguments: [{
                   label: leafName,
@@ -857,7 +857,7 @@ export class FtpRemoteService implements RemoteService {
               }
               
               LoggerService.log(`END: ${job.remotePath} [${uploadedCount}/${totalFiles}]`, 'FtpRemoteService', 'info');
-              vscode.window.setStatusBarMessage(`Remotix: Uploaded ${uploadedCount}/${totalFiles} items`, 2000);
+              vscode.window.setStatusBarMessage(`Tentacle: Uploaded ${uploadedCount}/${totalFiles} items`, 2000);
             }
           };
 
@@ -914,7 +914,7 @@ export class FtpRemoteService implements RemoteService {
       const os = require('os');
 
       const tmpDir = os.tmpdir();
-      const tmpPath = pathMod.join(tmpDir, `remotix_empty_${Date.now()}.txt`);
+      const tmpPath = pathMod.join(tmpDir, `tentacle_empty_${Date.now()}.txt`);
 
       try {
         LoggerService.log(`Creating empty file: ${remotePath}`, 'FtpRemoteService', 'info');
@@ -1224,7 +1224,7 @@ export class FtpRemoteService implements RemoteService {
       const pathMod = require('path');
       const source = RemotePathHelper.toAbsoluteRemotePath(sourceRemotePath, this.initialPath);
       const target = RemotePathHelper.toAbsoluteRemotePath(targetRemotePath, this.initialPath);
-      const tmpRoot = pathMod.join(os.tmpdir(), `remotix_copy_${Date.now()}_${Math.random().toString(16).slice(2)}`);
+      const tmpRoot = pathMod.join(os.tmpdir(), `tentacle_copy_${Date.now()}_${Math.random().toString(16).slice(2)}`);
       const recentCopiedFiles: string[] = [];
       const recentLimit = 4;
       let copiedFileCount = 0;
@@ -1242,7 +1242,7 @@ export class FtpRemoteService implements RemoteService {
         if (recentCopiedFiles.length > recentLimit) {
           recentCopiedFiles.length = recentLimit;
         }
-        setPersistentStatus(`Remotix: Copied ${copiedFileCount} file(s). Latest: ${recentCopiedFiles.join(', ')}`);
+        setPersistentStatus(`Tentacle: Copied ${copiedFileCount} file(s). Latest: ${recentCopiedFiles.join(', ')}`);
       };
 
       if (source === target) {
@@ -1296,7 +1296,7 @@ export class FtpRemoteService implements RemoteService {
 
       try {
         await fs.promises.mkdir(tmpRoot, { recursive: true });
-        setPersistentStatus(`Remotix: Copy started... ${RemotePathHelper.getRemoteLeafName(source)} -> ${RemotePathHelper.getRemoteLeafName(target)}`);
+        setPersistentStatus(`Tentacle: Copy started... ${RemotePathHelper.getRemoteLeafName(source)} -> ${RemotePathHelper.getRemoteLeafName(target)}`);
         if (isDirectory) {
           await copyDirectoryRecursive(source, target);
         } else {
@@ -1306,7 +1306,7 @@ export class FtpRemoteService implements RemoteService {
         activeStatusMessage?.dispose();
         activeStatusMessage = undefined;
         vscode.window.setStatusBarMessage(
-          `Remotix: Copy completed (${copiedFileCount} file(s)). Latest: ${recentCopiedFiles.join(', ')}`,
+          `Tentacle: Copy completed (${copiedFileCount} file(s)). Latest: ${recentCopiedFiles.join(', ')}`,
           5000
         );
       } catch (err: any) {
@@ -1314,7 +1314,7 @@ export class FtpRemoteService implements RemoteService {
         activeStatusMessage?.dispose();
         activeStatusMessage = undefined;
         vscode.window.setStatusBarMessage(
-          `Remotix: Copy failed after ${copiedFileCount} file(s)`,
+          `Tentacle: Copy failed after ${copiedFileCount} file(s)`,
           5000
         );
         throw err;
@@ -1360,7 +1360,7 @@ export class FtpRemoteService implements RemoteService {
                   remotePath: ftpPath,
                   host: this.connection.host,
                   user: this.connection.user,
-                  tmpFolderPrefix: 'remotix_ftp',
+                  tmpFolderPrefix: 'tentacle_ftp',
                   downloadToTemp: async (tmpFile) => {
                       if (token.isCancellationRequested) throw new Error('Cancelled');
                       

@@ -31,7 +31,7 @@ node_modules/**/tsconfig.json
 node_modules/**/*.md
 node_modules/**/*.markdown
 
-remotix-extension-*.vsix
+tentacle-*.vsix
 npm-debug.log*
 yarn.lock
 pnpm-lock.yaml

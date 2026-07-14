@@ -106,7 +106,7 @@
   "connectionClosed": "Підключення '{label}' закрито.",
   "connectionDeleted": "Підключення '{label}' видалено.",
   "extensionActivated": "Розширення активовано",
-  "renameClicked": "Remotix: Натиснуто перейменування для {label}",
+  "renameClicked": "Tentacle: Натиснуто перейменування для {label}",
   "missingSshPathOrConnectionLabel": "Не вказано sshPath або connectionLabel",
   "connectionNotFound": "Підключення не знайдено",
   "renameFailed": "Не вдалося перейменувати: {error}",
@@ -181,7 +181,7 @@
   "remotePathMissing": "Відсутній віддалений шлях",
   "ftpSessionNotInitializedOrClosed": "FTP-сесію не ініціалізовано або з'єднання закрито",
   "ftpSessionNotInitialized": "FTP-сесію не ініціалізовано",
-  "downloadProgressStatus": "Remotix: Завантажено {downloaded}/{total} елементів",
+  "downloadProgressStatus": "Tentacle: Завантажено {downloaded}/{total} елементів",
   "moveFailed": "Не вдалося перемістити: {error}",
   "itemsMovedSuccessfully": "Елементи успішно переміщено",
   "sshpassNotFound": "sshpass не знайдено."

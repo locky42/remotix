@@ -7,7 +7,7 @@ export class TreeItemFactory {
   createAddConnectionItem(): vscode.TreeItem {
     const addItem = new vscode.TreeItem(LangService.t('addConnection'), vscode.TreeItemCollapsibleState.None);
     addItem.command = {
-      command: 'remotix.addConnection',
+      command: 'tentacle.addConnection',
       title: LangService.t('addConnection')
     };
     addItem.iconPath = new vscode.ThemeIcon('add');
@@ -35,7 +35,7 @@ export class TreeItemFactory {
 
     if (!hasActiveSession) {
       item.command = {
-        command: 'remotix.expandConnectionOnDoubleClick',
+        command: 'tentacle.expandConnectionOnDoubleClick',
         title: 'Connect on Double Click',
         arguments: [item]
       };

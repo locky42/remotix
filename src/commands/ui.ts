@@ -13,25 +13,25 @@ export function registerUiCommands() {
     const context = Container.get('extensionContext') as vscode.ExtensionContext;
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
 
-    context.subscriptions.push(vscode.commands.registerCommand('remotix.moreActions', async () => {
+    context.subscriptions.push(vscode.commands.registerCommand('tentacle.moreActions', async () => {
         const pick = await vscode.window.showQuickPick([
         { label: LangService.t('importSshConfig'), action: 'importSshConfig' },
         { label: LangService.t('importFileZilla'), action: 'importFileZilla' }
         ], { placeHolder: LangService.t('chooseAction') });
         if (!pick) return;
         if (pick.action === 'importSshConfig') {
-        await vscode.commands.executeCommand('remotix.importSshConfig');
+        await vscode.commands.executeCommand('tentacle.importSshConfig');
         } else if (pick.action === 'importFileZilla') {
-        await vscode.commands.executeCommand('remotix.importFileZilla');
+        await vscode.commands.executeCommand('tentacle.importFileZilla');
         }
     }));
 
-    context.subscriptions.push(vscode.commands.registerCommand('remotix.openSettings', async () => {
-        await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:locky42.remotix-extension');
+    context.subscriptions.push(vscode.commands.registerCommand('tentacle.openSettings', async () => {
+        await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:locky42.tentacle');
     }));
 
-    context.subscriptions.push(vscode.commands.registerCommand('remotix.setLanguage', async () => {
-        const current = vscode.workspace.getConfiguration('remotix').get<string>('language', 'auto');
+    context.subscriptions.push(vscode.commands.registerCommand('tentacle.setLanguage', async () => {
+        const current = vscode.workspace.getConfiguration('tentacle').get<string>('language', 'auto');
         const pick = await vscode.window.showQuickPick([
             { label: LangService.t('languageAuto'), value: 'auto' },
             { label: LangService.t('languageEnglish'), value: 'en' },
@@ -44,7 +44,7 @@ export function registerUiCommands() {
             return;
         }
 
-        await vscode.workspace.getConfiguration('remotix').update('language', pick.value, vscode.ConfigurationTarget.Global);
+        await vscode.workspace.getConfiguration('tentacle').update('language', pick.value, vscode.ConfigurationTarget.Global);
         const effectiveLang = pick.value === 'auto'
             ? (vscode.env.language.toLowerCase().startsWith('uk') ? 'uk' : 'en')
             : pick.value;
@@ -54,7 +54,7 @@ export function registerUiCommands() {
         vscode.window.showInformationMessage(LangService.t('languageChanged'));
     }));
 
-    context.subscriptions.push(vscode.commands.registerCommand('remotix.refresh', async (item?: vscode.TreeItem) => {
+    context.subscriptions.push(vscode.commands.registerCommand('tentacle.refresh', async (item?: vscode.TreeItem) => {
         if (item) {
             const label = (item as any).connectionLabel || (typeof item.label === 'string' ? item.label : undefined);
             if (label && (((item as any).contextValue === ConnectionStatus.Cold) || ((item as any).contextValue === ConnectionStatus.Active))) {
@@ -66,13 +66,13 @@ export function registerUiCommands() {
         treeDataProvider.refresh();
     }));
 
-    context.subscriptions.push(vscode.commands.registerCommand('remotix.showConfig', async () => {
+    context.subscriptions.push(vscode.commands.registerCommand('tentacle.showConfig', async () => {
         const config = ConfigService.getGlobalConfig();
         vscode.window.showInformationMessage(LangService.t('globalConfigPrefix') + JSON.stringify(config));
     }));
 
     const doubleClickCommand = vscode.commands.registerCommand(
-        'remotix.expandConnectionOnDoubleClick',
+        'tentacle.expandConnectionOnDoubleClick',
         async (item: vscode.TreeItem) => {
             const label = (item as any).connectionLabel || String(item.label);
 
@@ -105,13 +105,13 @@ export function registerUiCommands() {
 
     context.subscriptions.push(doubleClickCommand);
 
-    context.subscriptions.push(vscode.commands.registerCommand('remotix.elementDoubleClick', async (item: any) => {
+    context.subscriptions.push(vscode.commands.registerCommand('tentacle.elementDoubleClick', async (item: any) => {
         if (!item) return;
 
         const itemKey = (item as any).sshPath || (item as any).ftpPath || String(item.label);
 
         if (DoubleClickHelper.isDoubleClick(itemKey)) {
-            await vscode.commands.executeCommand('remotix.editFile', item);
+            await vscode.commands.executeCommand('tentacle.editFile', item);
         }
     }));
 }

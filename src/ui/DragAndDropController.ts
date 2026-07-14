@@ -5,8 +5,8 @@ import { ConnectionManager } from '../services/ConnectionManager';
 import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
 
 export class DragAndDropController implements vscode.TreeDragAndDropController<vscode.TreeItem> {
-  readonly dragMimeTypes: string[] = ['application/vnd.code.tree.remotixView'];
-  readonly dropMimeTypes: string[] = ['application/vnd.code.tree.remotixView'];
+  readonly dragMimeTypes: string[] = ['application/vnd.code.tree.tentacleView'];
+  readonly dropMimeTypes: string[] = ['application/vnd.code.tree.tentacleView'];
   private dragOverTarget: string | null = null;
 
   constructor(private connectionManager: ConnectionManager, private fireChange: () => void, private treeDataProvider: any) {}
@@ -18,12 +18,12 @@ export class DragAndDropController implements vscode.TreeDragAndDropController<v
 
     const payload = DragAndDropController.serializeDragItems(source);
     if (payload && payload !== '[]') {
-      dataTransfer.set('application/vnd.code.tree.remotixView', new vscode.DataTransferItem(payload));
+      dataTransfer.set('application/vnd.code.tree.tentacleView', new vscode.DataTransferItem(payload));
     }
   }
 
   onDragOver(target: vscode.TreeItem | undefined, dataTransfer: vscode.DataTransfer): any {
-    const transfer = dataTransfer.get('application/vnd.code.tree.remotixView');
+    const transfer = dataTransfer.get('application/vnd.code.tree.tentacleView');
     const draggedItems = DragAndDropController.parseDragTransfer(transfer);
     if (!draggedItems.length) return;
 
@@ -45,7 +45,7 @@ export class DragAndDropController implements vscode.TreeDragAndDropController<v
   }
 
   async handleDrop(target: vscode.TreeItem | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
-    const transfer = dataTransfer.get('application/vnd.code.tree.remotixView');
+    const transfer = dataTransfer.get('application/vnd.code.tree.tentacleView');
     const draggedItems = DragAndDropController.parseDragTransfer(transfer);
     if (!draggedItems.length) return;
 
