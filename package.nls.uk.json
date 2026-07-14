@@ -15,10 +15,14 @@
   "command.showProperties": "Інфо",
   "command.deleteFile": "Видалити",
   "command.copyPath": "Копіювати шлях",
+  
+  "command.export": "Tentacle: Експортувати",
+  "command.import": "Tentacle: Імпортувати з Tentacle/Remotix",
   "command.importSshConfig": "Tentacle: Імпортувати з SSH config",
   "command.importFileZilla": "Tentacle: Імпортувати з FileZilla",
   "command.setLanguage": "Tentacle: Змінити мову",
   "command.openSettings": "Tentacle: Відкрити налаштування",
+  
   "command.createFile": "Створити файл",
   "command.createFolder": "Створити папку",
   "command.copyItem": "Копіювати",

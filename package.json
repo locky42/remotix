@@ -28,7 +28,11 @@
   ],
   "activationEvents": [
     "onCommand:tentacle.moreActions",
+
+    "onCommand:tentacle.export",
+    "onCommand:tentacle.import",
     "onCommand:tentacle.importSshConfig",
+
     "onCommand:tentacle.addConnection",
     "onCommand:tentacle.editConnection",
     "onCommand:tentacle.openSshTerminal",
@@ -116,6 +120,14 @@
       {
         "command": "tentacle.copyPath",
         "title": "%command.copyPath%"
+      },
+      {
+        "command": "tentacle.export",
+        "title": "%command.export%"
+      },
+      {
+        "command": "tentacle.import",
+        "title": "%command.import%"
       },
       {
         "command": "tentacle.importSshConfig",

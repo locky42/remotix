@@ -15,8 +15,12 @@
   "command.showProperties": "Info",
   "command.deleteFile": "Delete",
   "command.copyPath": "Copy Path",
+
+  "command.export": "Tentacle: Export",
+  "command.import": "Tentacle: Import from Tentacle/Remotix",
   "command.importSshConfig": "Tentacle: Import from SSH config",
   "command.importFileZilla": "Tentacle: Import from FileZilla",
+
   "command.setLanguage": "Tentacle: Set Language",
   "command.openSettings": "Tentacle: Open Settings",
   "command.createFile": "Create File",
