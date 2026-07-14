@@ -3,19 +3,19 @@ import { RemoteClipboard } from '../types';
 import { RemotePathHelper } from './RemotePathHelper';
 
 export class RemoteClipboardHelper {
-  private static readonly REMOTIX_CLIPBOARD_PREFIX = 'tentacle-clipboard:';
+  private static readonly TENTACLE_CLIPBOARD_PREFIX = 'tentacle-clipboard:';
 
   static serializeRemoteClipboard(payload: RemoteClipboard): string {
-    return `${RemoteClipboardHelper.REMOTIX_CLIPBOARD_PREFIX}${encodeURIComponent(JSON.stringify(payload))}`;
+    return `${RemoteClipboardHelper.TENTACLE_CLIPBOARD_PREFIX}${encodeURIComponent(JSON.stringify(payload))}`;
   }
 
   static parseRemoteClipboard(raw: string): RemoteClipboard | undefined {
     const text = String(raw || '').trim();
-    if (!text.startsWith(RemoteClipboardHelper.REMOTIX_CLIPBOARD_PREFIX)) {
+    if (!text.startsWith(RemoteClipboardHelper.TENTACLE_CLIPBOARD_PREFIX)) {
       return undefined;
     }
 
-    const encoded = text.slice(RemoteClipboardHelper.REMOTIX_CLIPBOARD_PREFIX.length);
+    const encoded = text.slice(RemoteClipboardHelper.TENTACLE_CLIPBOARD_PREFIX.length);
     if (!encoded) {
       return undefined;
     }
@@ -46,7 +46,7 @@ export class RemoteClipboardHelper {
 
   static parsePlainClipboardPath(raw: string): string | undefined {
     const text = String(raw || '').trim();
-    if (!text || text.startsWith(RemoteClipboardHelper.REMOTIX_CLIPBOARD_PREFIX)) {
+    if (!text || text.startsWith(RemoteClipboardHelper.TENTACLE_CLIPBOARD_PREFIX)) {
       return undefined;
     }
 
