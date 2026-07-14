@@ -28,6 +28,8 @@
   ],
   "activationEvents": [
     "onCommand:remotix.moreActions",
+    "onCommand:remotix.export",
+    "onCommand:remotix.import",
     "onCommand:remotix.importSshConfig",
     "onCommand:remotix.addConnection",
     "onCommand:remotix.editConnection",
@@ -116,6 +118,14 @@
       {
         "command": "remotix.copyPath",
         "title": "%command.copyPath%"
+      },
+      {
+        "command": "remotix.export",
+        "title": "%command.export%"
+      },
+      {
+        "command": "remotix.import",
+        "title": "%command.import%"
       },
       {
         "command": "remotix.importSshConfig",

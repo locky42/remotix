@@ -10,6 +10,14 @@
   "defaultNewFileName": "new-file.txt",
   "ftpNoFolderForFile": "FTP: No folder path specified for file creation.",
   "globalConfigPrefix": "Global config: ",
+
+  "export": "Remotix: Export",
+  "noConnectionsToExport": "No connections available to export.",
+  "exportSaveLabel": "Save Export File",
+  "exportSuccess": "Successfully exported {count} connections.",
+  "exportError": "Failed to export connections: {error}",
+
+  "import": "Remotix: Import from Remotix",
   "importSshConfig": "Import from ssh config",
   "importFileZilla": "Import from FileZilla",
   "setLanguage": "Set language",

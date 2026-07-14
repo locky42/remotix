@@ -230,6 +230,127 @@ export function registerConnectionCommands(saveConnection: Function) {
     }
   }));
 
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.export', async () => {
+    try {
+      const config = ConfigService.getGlobalConfig();
+      const connections = config.connections || [];
+
+      if (connections.length === 0) {
+        vscode.window.showWarningMessage(LangService.t('noConnectionsToExport'));
+        return;
+      }
+
+      const exportData = await Promise.all(connections.map(async (conn: any) => {
+        const password = await ConfigService.getPassword(conn.label);
+        return {
+          ...conn,
+          password: password || undefined
+        };
+      }));
+
+      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+      const defaultUri = vscode.Uri.file(path.join(homeDir, 'remotix-export.json'));
+
+      const uri = await vscode.window.showSaveDialog({
+        saveLabel: LangService.t('exportSaveLabel'),
+        filters: { 'JSON Files': ['json'] },
+        defaultUri: defaultUri
+      });
+
+      if (!uri) return;
+
+      const content = JSON.stringify(exportData, null, 2);
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
+
+      vscode.window.showInformationMessage(
+        LangService.t('exportSuccess', { count: connections.length })
+      );
+    } catch (e) {
+      vscode.window.showErrorMessage(
+        LangService.t('exportError', { error: (e instanceof Error ? e.message : String(e)) })
+      );
+    }
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('remotix.import', async () => {
+    try {
+      const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
+      const uris = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        openLabel: LangService.t('chooseImportFile'),
+        defaultUri: vscode.Uri.file(homeDir),
+        filters: { 'JSON Files': ['json'] }
+      });
+
+      if (!uris || uris.length === 0) return;
+      const filePath = uris[0].fsPath;
+      
+      const content = fs.readFileSync(filePath, 'utf8');
+      const importedConnections = JSON.parse(content);
+
+      if (!Array.isArray(importedConnections)) {
+        throw new Error('Invalid file format');
+      }
+
+      const config = ConfigService.getGlobalConfig();
+      const existingIdentityMap = new Map<string, number>(
+        config.connections.map((c: any, index: number) => [buildConnectionIdentity(c), index])
+      );
+
+      const importCandidates = importedConnections.map((connection, index) => {
+        const identity = buildConnectionIdentity(connection);
+        const exists = existingIdentityMap.has(identity);
+        return { key: `${identity}|${index}`, connection, identity, exists };
+      });
+
+      const picks = await vscode.window.showQuickPick(
+        importCandidates.map(candidate => ({
+          label: candidate.connection.label,
+          picked: !candidate.exists,
+          detail: `${candidate.connection.user || ''}@${candidate.connection.host || ''}`,
+          description: candidate.exists ? LangService.t('importRewriteHint') : undefined,
+          key: candidate.key
+        })),
+        { canPickMany: true, placeHolder: LangService.t('chooseConnectionsToImport') }
+      );
+
+      if (!picks || picks.length === 0) return;
+
+      let applied = 0;
+      for (const pick of picks) {
+        const candidate = importCandidates.find(c => c.key === (pick as any).key);
+        if (!candidate) continue;
+
+        const { connection } = candidate;
+        const identity = buildConnectionIdentity(connection);
+        const existingIndex = existingIdentityMap.get(identity);
+
+        if (existingIndex !== undefined) {
+          config.connections[existingIndex] = { ...config.connections[existingIndex], ...connection };
+        } else {
+          config.connections.push(connection);
+        }
+        
+        if (connection.password) {
+          await ConfigService.storePassword(connection.label, connection.password);
+        }
+
+        applied++;
+      }
+
+      ConfigService.saveGlobalConfig(config);
+      if (applied > 0) {
+        connectionManager.load();
+        treeDataProvider.refresh();
+      }
+      vscode.window.showInformationMessage(LangService.t('importedConnections', { count: applied, source: filePath }));
+    } catch (e) {
+      vscode.window.showErrorMessage(LangService.t('importError', { error: (e instanceof Error ? e.message : String(e)) }));
+    }
+  }));
+
   context.subscriptions.push(vscode.commands.registerCommand('remotix.importSshConfig', async () => {
     try {
       const homeDir = process.env.HOME || process.env.USERPROFILE || '.';

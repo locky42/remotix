@@ -10,6 +10,14 @@
   "ftpNoFolderForFile": "FTP: Не вказано шлях до папки для створення файлу.",
   "deleteFileWithDialogsNotImplemented": "Видалення файлу через діалогові вікна ще не реалізовано",
   "globalConfigPrefix": "Глобальна конфігурація: ",
+
+  "export": "Remotix: Експорт",
+  "noConnectionsToExport": "Немає з'єднань для експорту.",
+  "exportSaveLabel": "Зберегти файл експорту",
+  "exportSuccess": "Успішно експортовано {count} з'єднань.",
+  "exportError": "Помилка при експорті з'єднань: {error}",
+
+  "import": "Remotix: Імпортувати з Remotix",
   "importSshConfig": "Імпортувати з ssh config",
   "importFileZilla": "Імпортувати з FileZilla",
   "setLanguage": "Змінити мову",

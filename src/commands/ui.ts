@@ -15,14 +15,28 @@ export function registerUiCommands() {
 
     context.subscriptions.push(vscode.commands.registerCommand('remotix.moreActions', async () => {
         const pick = await vscode.window.showQuickPick([
-        { label: LangService.t('importSshConfig'), action: 'importSshConfig' },
-        { label: LangService.t('importFileZilla'), action: 'importFileZilla' }
+            { label: LangService.t('export'), action: 'export' },
+            { label: LangService.t('import'), action: 'import' },
+            { label: LangService.t('importSshConfig'), action: 'importSshConfig' },
+            { label: LangService.t('importFileZilla'), action: 'importFileZilla' }
         ], { placeHolder: LangService.t('chooseAction') });
         if (!pick) return;
-        if (pick.action === 'importSshConfig') {
-        await vscode.commands.executeCommand('remotix.importSshConfig');
-        } else if (pick.action === 'importFileZilla') {
-        await vscode.commands.executeCommand('remotix.importFileZilla');
+        switch (pick.action) {
+           case 'export':
+            await vscode.commands.executeCommand('remotix.export');
+            break;
+           case 'import':
+            await vscode.commands.executeCommand('remotix.import');
+            break;
+          case 'importSshConfig':
+            await vscode.commands.executeCommand('remotix.importSshConfig');
+            break;
+          case 'importFileZilla':
+            await vscode.commands.executeCommand('remotix.importFileZilla');
+            break;
+          default:
+            console.warn(`Невідома дія: ${pick.action}`);
+            break;
         }
     }));
 
