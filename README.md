@@ -15,7 +15,15 @@ Control your infrastructure, edit files, and manage remote systems without leavi
 
 ---
 
-## 🔥 What's New in v1.3.3
+## 🔥 What's New in v1.3.4
+
+- **📂 File Operations**: Added functionality to open files via a quick double-click.
+- **🔔 Notifications**: Integrated information messages regarding download, upload, and deletion status.
+- **🗑️ Deletion Logic**: Refactored file deletion via SSH to use `rm -rf`.
+- **🛠️ Connection Fix**: Resolved an issue where a connection could not be established via double-click after a single click.
+
+<details>
+<summary>Previous: v1.3.3</summary>
 
 - **🖱️ Double-Click Connection**: Servers now open strictly via a quick double-click. Single clicks will no longer trigger accidental connections.
 - **⚙️ Logging Levels**: Added an option to choose the log level (errors only or full debug mode) to significantly reduce system overhead.
@@ -26,6 +34,7 @@ Control your infrastructure, edit files, and manage remote systems without leavi
 - **🔧 Reliable Password Saving**: Fixed an issue where edited connection passwords were not applied until the extension or app was restarted.
 - **🖌️ Minor UI Fixes**: Polished visual elements and minor interface alignments across the extension panel.
 
+</details>
 <details>
 <summary>Previous: v1.3.2</summary>
 

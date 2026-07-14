@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.4] — 2026-07-13
+
+### Added
+* **File Operations**: Added functionality to open files via double-click.
+* **Notifications**: Integrated information messages regarding download, upload, and deletion status.
+
+### Changed
+* **Deletion Logic**: Refactored file deletion via SSH to use `rm -rf`.
+
+### Fixed
+* **Connection Stability**: Resolved an issue where a connection could not be established via double-click after a single click.
+
 ## [1.3.3] — 2026-06-19
 
 ### Added
