@@ -10,8 +10,17 @@
   "defaultNewFileName": "new-file.txt",
   "ftpNoFolderForFile": "FTP: No folder path specified for file creation.",
   "globalConfigPrefix": "Global config: ",
+
+  "export": "Tentacle: Export",
+  "noConnectionsToExport": "No connections available to export.",
+  "exportSaveLabel": "Save Export File",
+  "exportSuccess": "Successfully exported {count} connections.",
+  "exportError": "Failed to export connections: {error}",
+
+  "import": "Tentacle: Import from Tentacle",
   "importSshConfig": "Import from ssh config",
   "importFileZilla": "Import from FileZilla",
+  
   "setLanguage": "Set language",
   "chooseLanguage": "Choose language",
   "languageAuto": "Auto (use VS Code language)",
