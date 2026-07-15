@@ -183,14 +183,20 @@ export class FtpRemoteService implements RemoteService {
 
   async changePermissionsWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
-    const remotePath = String(item?.ftpPath || item?.sshPath || '').trim();
-    if (!remotePath) {
+    const items = Array.isArray(item) ? item : [item];
+    if (items.length === 0) {
+      return;
+    }
+
+    const remotePaths = items.map((one) => String(one?.ftpPath || one?.sshPath || '').trim()).filter(Boolean);
+    if (remotePaths.length !== items.length) {
       vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
       return;
     }
 
-    const isDirectory = item?.contextValue === 'ftp-folder' || item?.contextValue === 'ssh-folder';
-    const currentMode = PermissionHelper.normalizePermissionMode(String(item?.permissionMode || ''));
+    const isDirectory = items.some((one) => one?.contextValue === 'ftp-folder' || one?.contextValue === 'ssh-folder');
+    const firstItem = items[0];
+    const currentMode = PermissionHelper.normalizePermissionMode(String(firstItem?.permissionMode || ''));
     const modeInput = await vscode.window.showInputBox({
       prompt: LangService.t('enterPermissionMode'),
       placeHolder: LangService.t('permissionModePlaceholder'),
@@ -242,10 +248,17 @@ export class FtpRemoteService implements RemoteService {
     }
 
     try {
-      await this.changePermissions(remotePath, { mode, recursive, applyTo });
-      const refreshPath = isDirectory ? remotePath : RemotePathHelper.getParentRemotePath(remotePath);
-      RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ftp');
-      vscode.window.showInformationMessage(LangService.t('permissionsChanged', { path: remotePath, mode }));
+      for (const remotePath of remotePaths) {
+        await this.changePermissions(remotePath, { mode, recursive, applyTo });
+      }
+      const refreshPaths = Array.from(new Set(remotePaths.map((remotePath) => isDirectory ? remotePath : RemotePathHelper.getParentRemotePath(remotePath))));
+      for (const refreshPath of refreshPaths) {
+        RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ftp');
+      }
+      const message = items.length === 1
+        ? LangService.t('permissionsChanged', { path: remotePaths[0], mode })
+        : LangService.t('permissionsChangedMultiple', { count: items.length, mode });
+      vscode.window.showInformationMessage(message);
     } catch (error: any) {
       vscode.window.showErrorMessage(LangService.t('changePermissionsFailed', {
         error: error instanceof Error ? error.message : String(error)
@@ -476,9 +489,12 @@ export class FtpRemoteService implements RemoteService {
   }
 
   async downloadWithDialogs(item: any): Promise<void> {
-    const isDirectory = item?.contextValue === 'ssh-folder' || item?.contextValue === 'ftp-folder';
-    const selectedPath = item?.ftpPath || item?.sshPath || item?.item?.name || 'unknown';
-    LoggerService.log(`START dialog type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`, 'FtpRemoteService', 'info');
+    const items = Array.isArray(item) ? item : [item];
+    if (items.length === 0) {
+      return;
+    }
+
+    const selectedPaths = items.map((one) => one?.ftpPath || one?.sshPath || one?.item?.name || 'unknown');
     const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
     const uri = await vscode.window.showOpenDialog({
       canSelectFolders: true,
@@ -494,26 +510,29 @@ export class FtpRemoteService implements RemoteService {
             title: LangService.t('downloading'),
             cancellable: true
         }, async (progress, token) => {
-            
             token.onCancellationRequested(() => {
                 LoggerService.log('Download cancelled by user');
                 throw new Error('Cancelled');
             });
 
-            if (isDirectory) {
-                await this.downloadDir(item, localTarget, progress, token);
-            } else {
-                progress.report({ message: LangService.t('downloading') + `: ${require('path').basename(selectedPath)}` });
-                await this.download(item, localTarget);
+            for (const currentItem of items) {
+              const isDirectory = currentItem?.contextValue === 'ssh-folder' || currentItem?.contextValue === 'ftp-folder';
+              const currentPath = currentItem?.ftpPath || currentItem?.sshPath || currentItem?.item?.name || 'unknown';
+              if (isDirectory) {
+                await this.downloadDir(currentItem, localTarget, progress, token);
+              } else {
+                progress.report({ message: LangService.t('downloading') + `: ${require('path').basename(currentPath)}` });
+                await this.download(currentItem, localTarget);
+              }
             }
         });
 
         vscode.window.showInformationMessage(LangService.t('downloadSuccess'));
-        LoggerService.log(`END success type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`, 'FtpRemoteService', 'info');
+        LoggerService.log(`END success downloaded ${items.length} item(s)`, 'FtpRemoteService', 'info');
 
     } catch (err: any) {
         if (err.message !== 'Cancelled') {
-            LoggerService.log(`END fail type=${isDirectory ? 'directory' : 'file'} path=${selectedPath} error=${err?.message || String(err)}`, 'FtpRemoteService', 'error');
+            LoggerService.log(`END fail download error=${err?.message || String(err)}`, 'FtpRemoteService', 'error');
             vscode.window.showErrorMessage(LangService.t('downloadError', { error: err.message }));
         }
     }
@@ -1017,16 +1036,24 @@ export class FtpRemoteService implements RemoteService {
 
   async deleteWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
-    const ftpPath = RemoteCrudDialogHelper.getRemotePath(item);
-    
-    if (!ftpPath) {
+    const items = Array.isArray(item) ? item : [item];
+    if (items.length === 0) {
+      return;
+    }
+
+    const remotePaths = items.map((one) => RemoteCrudDialogHelper.getRemotePath(one)).filter(Boolean) as string[];
+    if (remotePaths.length !== items.length) {
       vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
       return;
     }
 
-    const isDir = RemoteCrudDialogHelper.isDirectoryItem(item);
+    const isDirectoryFlags = items.map((one) => RemoteCrudDialogHelper.isDirectoryItem(one));
+    const message = items.length === 1
+      ? LangService.t(isDirectoryFlags[0] ? 'confirmDeleteFolder' : 'confirmDeleteFile', { path: remotePaths[0] })
+      : LangService.t('confirmDeleteItems', { count: items.length });
+
     const confirm = await vscode.window.showWarningMessage(
-      LangService.t(isDir ? 'confirmDeleteFolder' : 'confirmDeleteFile', { path: ftpPath }),
+      message,
       { modal: true },
       LangService.t('delete')
     );
@@ -1039,28 +1066,39 @@ export class FtpRemoteService implements RemoteService {
       title: LangService.t('deleteInProgress'),
       cancellable: false
     }, async (progress) => {
-        LoggerService.log(`START type=${isDir ? 'directory' : 'file'} path=${ftpPath}`, 'FtpRemoteService', 'info');
+        LoggerService.log(`START delete paths=${JSON.stringify(remotePaths)}`, 'FtpRemoteService', 'info');
         
         try {
-          if (isDir) {
-            await this.deleteDir(ftpPath, progress);
-            vscode.window.showInformationMessage(LangService.t('folderDeleted', { path: ftpPath }));
-          } else {
-            progress.report({ message: ftpPath });
-            await this.deleteFile(ftpPath);
-            vscode.window.showInformationMessage(LangService.t('fileDeleted', { path: ftpPath }));
+          for (let i = 0; i < items.length; i += 1) {
+            const currentPath = remotePaths[i];
+            const isDir = isDirectoryFlags[i];
+            if (isDir) {
+              await this.deleteDir(currentPath, progress);
+            } else {
+              progress.report({ message: currentPath });
+              await this.deleteFile(currentPath);
+            }
           }
-          
-          RemoteRefreshHelper.refreshRemoteFolder(
-            treeDataProvider, 
-            this.connection.label, 
-            RemotePathHelper.getParentRemotePath(ftpPath), 
-            'ftp'
-          );
-          LoggerService.log(`END success type=${isDir ? 'directory' : 'file'} path=${ftpPath}`, 'FtpRemoteService', 'info');
+
+          const parentPaths = Array.from(new Set(remotePaths.map((path) => RemotePathHelper.getParentRemotePath(path))));
+          for (const parentPath of parentPaths) {
+            RemoteRefreshHelper.refreshRemoteFolder(
+              treeDataProvider,
+              this.connection.label,
+              parentPath,
+              'ftp'
+            );
+          }
+
+          const successMessage = items.length === 1
+            ? LangService.t(isDirectoryFlags[0] ? 'folderDeleted' : 'fileDeleted', { path: remotePaths[0] })
+            : LangService.t('itemsDeleted', { count: items.length });
+
+          vscode.window.showInformationMessage(successMessage);
+          LoggerService.log(`END success deleted ${items.length} item(s)`, 'FtpRemoteService', 'info');
         } catch (e: any) {
             const errorMsg = e instanceof Error ? e.message : String(e);
-            LoggerService.log(`END fail type=${isDir ? 'directory' : 'file'} path=${ftpPath} error=${errorMsg}`, 'FtpRemoteService', 'error');
+            LoggerService.log(`END fail delete error=${errorMsg}`, 'FtpRemoteService', 'error');
             vscode.window.showErrorMessage(LangService.t('deleteFailed', { error: errorMsg }));
         } finally {
             treeDataProvider?.treeLocker?.unlock();

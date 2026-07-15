@@ -389,12 +389,15 @@ export class SshRemoteService implements RemoteService {
   }
 
   async downloadWithDialogs(item: any): Promise<void> {
-    LoggerService.log(`downloadWithDialogs ENTRY: item=${JSON.stringify(item)}, contextValue=${item?.contextValue}`, 'SshRemoteService', 'info');
-    const isDirectory = item?.contextValue === 'ssh-folder' || item?.contextValue === 'ftp-folder';
-    const selectedPath = item?.sshPath || item?.ftpPath || 'unknown';
-    LoggerService.log(`START dialog type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`, 'SshRemoteService', 'info');
-    LoggerService.log(`downloadWithDialogs isDirectory=${isDirectory}`, 'SshRemoteService', 'info');
-  
+    const items = Array.isArray(item) ? item : [item];
+    if (items.length === 0) {
+      return;
+    }
+
+    const selectedPaths = items.map((one) => one?.sshPath || one?.ftpPath || one?.label || 'unknown');
+    const containsDirectory = items.some((one) => one?.contextValue === 'ssh-folder' || one?.contextValue === 'ftp-folder');
+    LoggerService.log(`downloadWithDialogs ENTRY: items=${JSON.stringify(selectedPaths)}, directories=${containsDirectory}`, 'SshRemoteService', 'info');
+
     const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
     const uri = await vscode.window.showOpenDialog({
       canSelectFolders: true,
@@ -402,31 +405,36 @@ export class SshRemoteService implements RemoteService {
       openLabel: LangService.t('chooseDownloadTarget'),
       defaultUri: vscode.Uri.file(homeDir)
     });
-      if (!uri || uri.length === 0) return;
-      const localTarget = uri[0].fsPath;
-      try {
-        if (isDirectory) {
-          await this.downloadDir(item, localTarget);
-      } else {
-        await this.download(item, localTarget);
+    if (!uri || uri.length === 0) return;
+
+    const localTarget = uri[0].fsPath;
+
+    try {
+      for (const currentItem of items) {
+        if (currentItem?.contextValue === 'ssh-folder' || currentItem?.contextValue === 'ftp-folder') {
+          await this.downloadDir(currentItem, localTarget);
+        } else {
+          await this.download(currentItem, localTarget);
+        }
       }
+
       vscode.window.showInformationMessage(LangService.t('downloadSuccess'));
-        LoggerService.log(`END success type=${isDirectory ? 'directory' : 'file'} path=${selectedPath}`, 'SshRemoteService', 'info');
+      LoggerService.log(`END success downloaded ${items.length} item(s)`, 'SshRemoteService', 'info');
     } catch (err: any) {
-        LoggerService.log(`END fail type=${isDirectory ? 'directory' : 'file'} path=${selectedPath} error=${err?.message || String(err)}`, 'SshRemoteService', 'error');
+      LoggerService.log(`END fail download error=${err?.message || String(err)}`, 'SshRemoteService', 'error');
       vscode.window.showErrorMessage(LangService.t('downloadError', { error: err.message }));
     }
   }
 
   async downloadFolderArchiveWithDialogs(item: any): Promise<void> {
-    const remoteDirRaw = String(item?.sshPath || '').trim();
-    if (!remoteDirRaw) {
-      vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
+    const items = Array.isArray(item) ? item : [item];
+    if (items.length === 0) {
       return;
     }
 
-    if (item?.contextValue !== 'ssh-folder') {
-      vscode.window.showErrorMessage(LangService.t('downloadArchiveOnlyForSshFolder'));
+    const remotePaths = items.map((one) => String(one?.sshPath || '').trim());
+    if (remotePaths.some((remotePath) => !remotePath)) {
+      vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
       return;
     }
 
@@ -439,16 +447,17 @@ export class SshRemoteService implements RemoteService {
     });
     if (!uri || uri.length === 0) return;
 
-    const remoteDir = RemotePathHelper.normalizeRemotePath(remoteDirRaw).replace(/\/+$/g, '') || '/';
-    const folderName = remoteDir.split('/').filter(Boolean).pop();
-    if (!folderName) {
-      vscode.window.showErrorMessage(LangService.t('downloadArchiveRootNotSupported'));
-      return;
-    }
+    const targetFolder = uri[0].fsPath;
+    const pathMod = require('path');
+    const fsMod = require('fs');
+
+    const suggestedName = items.length === 1
+      ? `${RemotePathHelper.normalizeRemotePath(remotePaths[0]).split('/').filter(Boolean).pop() || 'archive'}.tar.gz`
+      : 'archive.tar.gz';
 
     const archiveNameInput = await vscode.window.showInputBox({
       prompt: LangService.t('enterArchiveFileName'),
-      value: `${folderName}.tar.gz`,
+      value: suggestedName,
       validateInput: (value) => {
         const trimmed = String(value || '').trim();
         if (!trimmed) return LangService.t('archiveFileNameRequired');
@@ -458,106 +467,146 @@ export class SshRemoteService implements RemoteService {
     });
     if (!archiveNameInput) return;
 
-    const pathMod = require('path');
-    const fsMod = require('fs');
     const archiveName = archiveNameInput.trim();
-    const localDest = pathMod.join(uri[0].fsPath, archiveName);
+    const localDest = pathMod.join(targetFolder, archiveName);
 
-    const parentRemotePath = RemotePathHelper.getParentRemotePath(remoteDir);
-    const streamArchiveCommand = `tar -C ${this.quoteForShell(parentRemotePath)} -czf - ${this.quoteForShell(folderName)}`;
+    const normalizeArchivePath = (remotePath: string): string => {
+      const normalized = RemotePathHelper.normalizeRemotePath(remotePath);
+      return normalized === '/' ? '/' : normalized.replace(/\/+$/g, '');
+    };
+
+    const getCommonParentPath = (paths: string[]): string => {
+      if (paths.length === 0) return '/';
+      if (paths.length === 1) {
+        const parentPath = RemotePathHelper.getParentRemotePath(paths[0]);
+        return RemotePathHelper.normalizeRemotePath(parentPath) || '/';
+      }
+
+      const pathParts = paths.map((path) => normalizeArchivePath(path).split('/').filter(Boolean));
+      let commonParts: string[] = [...(pathParts[0] || [])];
+
+      for (let index = 1; index < pathParts.length; index += 1) {
+        const currentParts = pathParts[index] || [];
+        const maxLength = Math.min(commonParts.length, currentParts.length);
+        let sharedLength = 0;
+        for (let partIndex = 0; partIndex < maxLength; partIndex += 1) {
+          if (commonParts[partIndex] !== currentParts[partIndex]) {
+            break;
+          }
+          sharedLength += 1;
+        }
+        commonParts = commonParts.slice(0, sharedLength);
+        if (commonParts.length === 0) {
+          break;
+        }
+      }
+
+      return commonParts.length > 0 ? `/${commonParts.join('/')}` : '/';
+    };
+
+    const commonParentPath = getCommonParentPath(remotePaths);
+    const relativeArchiveEntries = remotePaths.map((remotePath) => {
+      const normalizedPath = normalizeArchivePath(remotePath);
+      const commonParentParts = commonParentPath === '/' ? [] : commonParentPath.split('/').filter(Boolean);
+      const pathParts = normalizedPath.split('/').filter(Boolean);
+      const relativeParts = pathParts.slice(commonParentParts.length);
+      if (relativeParts.length > 0) {
+        return relativeParts.join('/');
+      }
+      return pathMod.posix.basename(normalizedPath) || '.';
+    });
+
+    if (relativeArchiveEntries.some((relativePath) => !relativePath || relativePath === '.')) {
+      vscode.window.showErrorMessage(LangService.t('downloadArchiveRootNotSupported'));
+      return;
+    }
+
+    const tarArgs = relativeArchiveEntries.map((relativePath) => this.quoteForShell(relativePath)).join(' ');
+    const streamArchiveCommand = `tar -C ${this.quoteForShell(commonParentPath)} -czf - ${tarArgs}`;
     const isIgnorableTarWarning = (message: string): boolean => message.toLowerCase().includes('file changed as we read it');
-    
-    let archiveDownloadedWithWarnings = false;
-    let archiveWarningText = '';
 
-    LoggerService.log(`START dir=${remoteDir} local=${localDest}`, 'SshRemoteService', 'info');
+    LoggerService.log(`START archive paths=${JSON.stringify(remotePaths)} local=${localDest}`, 'SshRemoteService', 'info');
 
     try {
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
-        title: LangService.t('downloading') + '\n',
+        title: LangService.t('archiveDownloadPreparing'),
         cancellable: true
       }, async (progress, token) => {
-          progress.report({ message: `[...]: ${archiveName}` });
-          
-          const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
-          if (!session) throw new Error('SSH session is not available');
+        progress.report({ message: archiveName });
 
-          return new Promise<void>((resolve, reject) => {
-            session.exec(streamArchiveCommand, (err, stream) => {
-              if (err) return reject(err);
+        const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
+        if (!session) throw new Error('SSH session is not available');
 
-              token.onCancellationRequested(() => {
-                stream.destroy();
-                reject(new Error('Cancelled'));
-              });
+        return new Promise<void>((resolve, reject) => {
+          session.exec(streamArchiveCommand, (err, stream) => {
+            if (err) return reject(err);
 
-              const writeStream = fsMod.createWriteStream(localDest);
-              const stderrChunks: string[] = [];
-              let streamClosed = false;
-              let writeClosed = false;
-              let settled = false;
+            token.onCancellationRequested(() => {
+              stream.destroy();
+              reject(new Error('Cancelled'));
+            });
 
-              const finishSuccess = () => {
-                if (settled || !streamClosed || !writeClosed) return;
-                settled = true;
-                resolve();
-              };
+            const writeStream = fsMod.createWriteStream(localDest);
+            const stderrChunks: string[] = [];
+            let streamClosed = false;
+            let writeClosed = false;
+            let settled = false;
 
-              const finishError = (error: Error) => {
-                if (settled) return;
-                settled = true;
-                try { writeStream.destroy(); } catch {}
-                try { fsMod.rmSync(localDest, { force: true }); } catch {}
-                reject(error);
-              };
+            const finishSuccess = () => {
+              if (settled || !streamClosed || !writeClosed) return;
+              settled = true;
+              resolve();
+            };
 
-              stream.on('error', (e: Error) => finishError(e));
-              writeStream.on('error', (e: Error) => { stream.destroy(); finishError(e); });
-              writeStream.on('close', () => { writeClosed = true; finishSuccess(); });
+            const finishError = (error: Error) => {
+              if (settled) return;
+              settled = true;
+              try { writeStream.destroy(); } catch {}
+              try { fsMod.rmSync(localDest, { force: true }); } catch {}
+              reject(error);
+            };
 
-              stream.stderr.on('data', (d: Buffer) => {
-                const msg = d.toString();
-                stderrChunks.push(msg);
-                LoggerService.log(`stderr: ${msg}`, 'SshRemoteService', 'error');
-              });
+            stream.on('error', (e: Error) => finishError(e));
+            writeStream.on('error', (e: Error) => { stream.destroy(); finishError(e); });
+            writeStream.on('close', () => { writeClosed = true; finishSuccess(); });
 
-              stream.on('close', (code: number) => {
-                streamClosed = true;
-                writeStream.end();
-                const stderrText = stderrChunks.join('');
-                if (code === 0) {
-                  finishSuccess();
-                } else if (code === 1 && stderrText && isIgnorableTarWarning(stderrText)) {
-                  archiveDownloadedWithWarnings = true;
-                  archiveWarningText = stderrText.trim();
-                  finishSuccess();
-                } else {
-                  finishError(new Error(stderrText.trim() || `tar exited with code ${code}`));
-                }
-              });
+            stream.stderr.on('data', (d: Buffer) => {
+              const msg = d.toString();
+              stderrChunks.push(msg);
+              LoggerService.log(`stderr: ${msg}`, 'SshRemoteService', 'error');
+            });
 
-              stream.pipe(writeStream);
+            stream.on('close', (code: number) => {
+              streamClosed = true;
+              writeStream.end();
+              const stderrText = stderrChunks.join('');
+              if (code === 0) {
+                finishSuccess();
+              } else if (code === 1 && stderrText && isIgnorableTarWarning(stderrText)) {
+                finishSuccess();
+              } else {
+                finishError(new Error(stderrText.trim() || `tar exited with code ${code}`));
+              }
+            });
+
+            stream.pipe(writeStream);
           });
         });
       });
 
       const showAction = LangService.t('showInFolder');
-      vscode.window.showInformationMessage(LangService.t('archiveDownloadSuccess', { path: localDest }), showAction).then(action => {
-        if (action === showAction) vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(localDest));
+      vscode.window.showInformationMessage(LangService.t('archiveDownloadSuccess', { path: localDest }), showAction).then((action) => {
+        if (action === showAction) {
+          vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(localDest));
+        }
       });
-
-      if (archiveDownloadedWithWarnings) {
-        LoggerService.log(`END success with warnings dir=${remoteDir} warning=${archiveWarningText}`, 'SshRemoteService', 'warning');
-        vscode.window.showWarningMessage(LangService.t('archiveDownloadWarningChangedFiles'));
-      }
-      LoggerService.log(`END success dir=${remoteDir} local=${localDest}`, 'SshRemoteService', 'info');
-
+      LoggerService.log(`END archive success paths=${JSON.stringify(remotePaths)} local=${localDest}`, 'SshRemoteService', 'info');
     } catch (error: any) {
       if (error.message !== 'Cancelled') {
-        LoggerService.log(`END fail dir=${remoteDir} error=${error instanceof Error ? error.message : String(error)}`, 'SshRemoteService', 'error');
+        LoggerService.log(`END fail archive error=${error instanceof Error ? error.message : String(error)}`, 'SshRemoteService', 'error');
         vscode.window.showErrorMessage(LangService.t('archiveDownloadError', {
-            error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error)
         }));
       }
     }
@@ -1051,36 +1100,61 @@ export class SshRemoteService implements RemoteService {
 
   async deleteWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
-    const sshPath = RemoteCrudDialogHelper.getRemotePath(item);
-    if (!sshPath) {
+    const items = Array.isArray(item) ? item : [item];
+    if (items.length === 0) {
+      return;
+    }
+
+    const remotePaths = items.map((one) => RemoteCrudDialogHelper.getRemotePath(one)).filter(Boolean) as string[];
+    if (remotePaths.length !== items.length) {
       vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
       return;
     }
 
-    const isDir = RemoteCrudDialogHelper.isDirectoryItem(item);
+    const isDirectoryFlags = items.map((one) => RemoteCrudDialogHelper.isDirectoryItem(one));
+    const message = items.length === 1
+      ? LangService.t(isDirectoryFlags[0] ? 'confirmDeleteFolder' : 'confirmDeleteFile', { path: remotePaths[0] })
+      : LangService.t('confirmDeleteItems', { count: items.length });
+
     const confirm = await vscode.window.showWarningMessage(
-      LangService.t(isDir ? 'confirmDeleteFolder' : 'confirmDeleteFile', { path: sshPath }),
+      message,
       { modal: true },
       LangService.t('delete')
     );
     if (confirm !== LangService.t('delete')) return;
+
+    treeDataProvider?.treeLocker?.lock(LangService.t('deleteInProgress'), this.connection.label);
 
     await vscode.window.withProgress({
       location: vscode.ProgressLocation.Notification,
       title: LangService.t('deleteInProgress') + '...',
       cancellable: false
     }, async () => {
-      LoggerService.log(`DELETE START path=${sshPath}`, 'SshRemoteService', 'info');
-      treeDataProvider?.treeLocker?.lock(LangService.t('deleteInProgress'), this.connection.label);
-      
+      LoggerService.log(`DELETE START paths=${JSON.stringify(remotePaths)}`, 'SshRemoteService', 'info');
+
       try {
-        await this.deleteRemoteItem(sshPath);
-        vscode.window.showInformationMessage(LangService.t(isDir ? 'folderDeleted' : 'fileDeleted', { path: sshPath }));
-        
-        RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, RemotePathHelper.getParentRemotePath(sshPath), 'ssh');
-        LoggerService.log(`DELETE END success path=${sshPath}`, 'SshRemoteService', 'info');
+        for (let i = 0; i < items.length; i += 1) {
+          const currentPath = remotePaths[i];
+          if (isDirectoryFlags[i]) {
+            await this.deleteRemoteItem(currentPath);
+          } else {
+            await this.deleteRemoteItem(currentPath);
+          }
+        }
+
+        const parentPaths = Array.from(new Set(remotePaths.map((path) => RemotePathHelper.getParentRemotePath(path))));
+        for (const parentPath of parentPaths) {
+          RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, parentPath, 'ssh');
+        }
+
+        const successMessage = items.length === 1
+          ? LangService.t(isDirectoryFlags[0] ? 'folderDeleted' : 'fileDeleted', { path: remotePaths[0] })
+          : LangService.t('itemsDeleted', { count: items.length });
+
+        vscode.window.showInformationMessage(successMessage);
+        LoggerService.log(`DELETE END success paths=${JSON.stringify(remotePaths)}`, 'SshRemoteService', 'info');
       } catch (e: any) {
-        LoggerService.log(`DELETE END fail path=${sshPath} error=${e.message}`, 'SshRemoteService', 'error');
+        LoggerService.log(`DELETE END fail paths=${JSON.stringify(remotePaths)} error=${e.message}`, 'SshRemoteService', 'error');
         vscode.window.showErrorMessage(LangService.t('deleteFailed', { error: e.message }));
       } finally {
         treeDataProvider?.treeLocker?.unlock();
@@ -1241,14 +1315,20 @@ export class SshRemoteService implements RemoteService {
 
   async changePermissionsWithDialogs(item: any): Promise<void> {
     const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
-    const remotePath = String(item?.sshPath || item?.ftpPath || '').trim();
-    if (!remotePath) {
+    const items = Array.isArray(item) ? item : [item];
+    if (items.length === 0) {
+      return;
+    }
+
+    const remotePaths = items.map((one) => String(one?.sshPath || one?.ftpPath || '').trim()).filter(Boolean);
+    if (remotePaths.length !== items.length) {
       vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
       return;
     }
 
-    const isDirectory = item?.contextValue === 'ssh-folder' || item?.contextValue === 'ftp-folder';
-    const currentMode = PermissionHelper.normalizePermissionMode(String(item?.permissionMode || ''));
+    const isDirectory = items.some((one) => one?.contextValue === 'ssh-folder' || one?.contextValue === 'ftp-folder');
+    const firstItem = items[0];
+    const currentMode = PermissionHelper.normalizePermissionMode(String(firstItem?.permissionMode || ''));
     const modeInput = await vscode.window.showInputBox({
       prompt: LangService.t('enterPermissionMode'),
       placeHolder: LangService.t('permissionModePlaceholder'),
@@ -1300,15 +1380,22 @@ export class SshRemoteService implements RemoteService {
     }
 
     try {
-      await this.changePermissions(remotePath, { mode, recursive, applyTo });
-      const refreshPath = isDirectory ? remotePath : RemotePathHelper.getParentRemotePath(remotePath);
-      RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ssh');
-      vscode.window.showInformationMessage(LangService.t('permissionsChanged', { path: remotePath, mode }));
+      for (const remotePath of remotePaths) {
+        await this.changePermissions(remotePath, { mode, recursive, applyTo });
+      }
+      const refreshPaths = Array.from(new Set(remotePaths.map((remotePath) => isDirectory ? remotePath : RemotePathHelper.getParentRemotePath(remotePath))));
+      for (const refreshPath of refreshPaths) {
+        RemoteRefreshHelper.refreshRemoteFolder(treeDataProvider, this.connection.label, refreshPath, 'ssh');
+      }
+      const message = items.length === 1
+        ? LangService.t('permissionsChanged', { path: remotePaths[0], mode })
+        : LangService.t('permissionsChangedMultiple', { count: items.length, mode });
+      vscode.window.showInformationMessage(message);
     } catch (error: any) {
       vscode.window.showErrorMessage(LangService.t('changePermissionsFailed', {
         error: error instanceof Error ? error.message : String(error)
       }));
-      LoggerService.log(`CHMOD END fail path=${remotePath} error=${error instanceof Error ? error.message : String(error)}`, 'SshRemoteService', 'error');
+      LoggerService.log(`CHMOD END fail paths=${JSON.stringify(remotePaths)} error=${error instanceof Error ? error.message : String(error)}`, 'SshRemoteService', 'error');
     }
   }
 

@@ -105,7 +105,8 @@ export function registerFileFolderCommands() {
   const context = Container.get('extensionContext') as vscode.ExtensionContext;
 
   context.subscriptions.push(vscode.commands.registerCommand('tentacle.download', async (item: any) => {
-    const connection = resolveConnectionItem(item);
+    const items = resolveCommandItems(item);
+    const connection = resolveConnectionItem(items);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
       return;
@@ -115,11 +116,12 @@ export function registerFileFolderCommands() {
       return;
     }
     
-    await service.downloadWithDialogs?.(item);
+    await service.downloadWithDialogs?.(items);
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('tentacle.downloadFolderArchive', async (item: any) => {
-    const connection = resolveConnectionItem(item);
+    const items = resolveCommandItems(item);
+    const connection = resolveConnectionItem(items);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
       return;
@@ -134,7 +136,7 @@ export function registerFileFolderCommands() {
       return;
     }
 
-    await service.downloadFolderArchiveWithDialogs(item);
+    await service.downloadFolderArchiveWithDialogs(items);
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('tentacle.upload', async (item: any) => {
@@ -180,7 +182,8 @@ export function registerFileFolderCommands() {
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('tentacle.changePermissions', async (item: any) => {
-    const connection = resolveConnectionItem(item);
+    const items = resolveCommandItems(item);
+    const connection = resolveConnectionItem(items);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
       return;
@@ -195,7 +198,7 @@ export function registerFileFolderCommands() {
       return;
     }
 
-    await service.changePermissionsWithDialogs(item);
+    await service.changePermissionsWithDialogs(items);
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('tentacle.showProperties', async (item: any) => {
@@ -244,7 +247,8 @@ export function registerFileFolderCommands() {
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('tentacle.deleteFile', async (item: any) => {
-    const connection = resolveConnectionItem(item);
+    const items = resolveCommandItems(item);
+    const connection = resolveConnectionItem(items);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
       return;
@@ -253,7 +257,7 @@ export function registerFileFolderCommands() {
     if (!service) {
       return;
     }
-    await service.deleteWithDialogs?.(item);
+    await service.deleteWithDialogs?.(items);
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('tentacle.copyItem', async (item: any) => {

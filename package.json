@@ -287,7 +287,7 @@
         },
         {
           "command": "tentacle.downloadFolderArchive",
-          "when": "view == tentacleView && viewItem == ssh-folder",
+          "when": "view == tentacleView && (viewItem == ssh-folder || viewItem == ssh-file)",
           "group": "3_transfer@2"
         },
         {
