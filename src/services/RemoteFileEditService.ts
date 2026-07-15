@@ -4,47 +4,50 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { LangService } from './LangService';
 import { RemoteFileEditOptions } from '../types';
+import { LoggerService } from './LoggerService';
 
 export class RemoteFileEditService {
-  public async openWithTempFile(options: RemoteFileEditOptions): Promise<void> {
-    const tmpFile = this.buildTempFilePath(options.remotePath, options.host, options.tmpFolderPrefix);
-    fs.mkdirSync(path.dirname(tmpFile), { recursive: true });
+  public async openWithTempFiles(options: RemoteFileEditOptions): Promise<void> {
+    LoggerService.log(`openWithTempFiles: remoteFiles count=${options.remoteFiles.length}`, 'RemoteFileEditService', 'info');
+    LoggerService.log(options, 'DEBUG openWithTempFiles')
+    const activeTmpFiles = new Map<string, string>();
+    for (const remotePath of options.remoteFiles) {
+      const tmpFile = this.buildTempFilePath(remotePath, options.host, options.tmpFolderPrefix);
+      fs.mkdirSync(path.dirname(tmpFile), { recursive: true });
 
-    await options.downloadToTemp(tmpFile);
+      await options.downloadToTemp(tmpFile);
+      activeTmpFiles.set(tmpFile, remotePath);
 
-    const doc = await vscode.workspace.openTextDocument(tmpFile);
-    await vscode.window.showTextDocument(doc, { preview: false, viewColumn: vscode.ViewColumn.Active });
+      const doc = await vscode.workspace.openTextDocument(tmpFile);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    }
 
-    vscode.window.setStatusBarMessage(LangService.t('remoteFile', {
-      user: options.user ?? '',
-      host: options.host ?? '',
-      path: options.remotePath,
+    vscode.window.setStatusBarMessage(LangService.t('remoteFilesOpened', {
+      count: options.remoteFiles.length
     }), 5000);
 
     const subscriptions: vscode.Disposable[] = [];
 
-    const saveSub = vscode.workspace.onDidSaveTextDocument(async (savedDoc) => {
-      if (savedDoc.fileName !== tmpFile) {
-        return;
-      }
+    subscriptions.push(vscode.workspace.onDidSaveTextDocument(async (savedDoc) => {
+      if (!activeTmpFiles.has(savedDoc.fileName)) return;
 
       try {
-        await options.uploadFromTemp(tmpFile);
+        await options.uploadFromTemp(savedDoc.fileName);
         vscode.window.setStatusBarMessage(LangService.t('fileSavedToServer'), 2000);
-      } catch (uploadError: any) {
+      } catch (uploadError: unknown) {
+        options.logCleanupError?.(uploadError);
         vscode.window.showErrorMessage(LangService.t('fileUploadError', {
           error: uploadError instanceof Error ? uploadError.message : String(uploadError),
         }));
       }
-    });
-    subscriptions.push(saveSub);
+    }));
 
-    const closeSub = vscode.workspace.onDidCloseTextDocument((closedDoc) => {
-      if (closedDoc.fileName !== tmpFile) {
-        return;
-      }
+    subscriptions.push(vscode.workspace.onDidCloseTextDocument((closedDoc) => {
+      if (!activeTmpFiles.has(closedDoc.fileName)) return;
 
-      subscriptions.forEach((sub) => sub.dispose());
+      const tmpFile = closedDoc.fileName;
+      activeTmpFiles.delete(tmpFile);
+
       try {
         if (fs.existsSync(tmpFile)) {
           fs.unlinkSync(tmpFile);
@@ -52,19 +55,27 @@ export class RemoteFileEditService {
       } catch (cleanupError) {
         options.logCleanupError?.(cleanupError);
       }
-    });
-    subscriptions.push(closeSub);
+
+      if (activeTmpFiles.size === 0) {
+        subscriptions.forEach((sub) => sub.dispose());
+      }
+    }));
   }
 
   private buildTempFilePath(remotePath: string, host: string | undefined, tmpFolderPrefix: string): string {
     const safeHost = String(host || 'unknown_host').replace(/[^\w]/g, '_');
+    
+    const fileName = path.basename(remotePath).replace(/[^\w.\-]/g, '_');
     const safeRelPath = String(remotePath || '')
       .replace(/^\/+/, '')
+      .replace(/\/+$/, '')
       .split('/')
+      .slice(0, -1)
       .map((segment) => segment.replace(/[^\w.\-]/g, '_'))
       .join(path.sep);
 
-    const tmpDir = path.join(os.tmpdir(), `${tmpFolderPrefix}_${safeHost}`);
-    return path.join(tmpDir, safeRelPath);
+    const tmpDir = path.join(os.tmpdir(), `${tmpFolderPrefix}_${safeHost}`, safeRelPath);
+    
+    return path.join(tmpDir, `${Date.now()}_${fileName}`);
   }
 }

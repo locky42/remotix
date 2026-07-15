@@ -85,6 +85,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const treeView = vscode.window.createTreeView('tentacleView', {
     treeDataProvider,
+    canSelectMany: true,
     dragAndDropController: treeDataProvider
   });
   context.subscriptions.push(treeView);

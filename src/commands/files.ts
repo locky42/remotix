@@ -7,6 +7,7 @@ import { RemoteService } from '../services/Remote/RemoteService';
 import { ConnectionManager } from '../services/ConnectionManager';
 import { RemoteClipboardHelper } from '../helpers/RemoteClipboardHelper';
 import { RemoteServiceProvider } from '../services/RemoteServiceProvider';
+import { LoggerService } from '../services/LoggerService';
 
 let remoteClipboard: RemoteClipboard | undefined;
 
@@ -44,16 +45,60 @@ function buildIndexedCopyName(originalName: string, index: number, isDirectory: 
 }
 
 function resolveConnectionItem(item: any): ConnectionItem | undefined {
-  const label = item?.connectionLabel || item?.label;
-  if (!label) {
+  const itemsArray = Array.isArray(item) ? item : [item];
+  const labels = itemsArray
+    .map((it) => it?.connectionLabel || it?.label)
+    .filter((label) => typeof label === 'string') as string[];
+
+  if (labels.length === 0) {
     return undefined;
   }
+
+  const uniqueLabels = Array.from(new Set(labels.map(String)));
+  if (uniqueLabels.length !== 1) {
+    return undefined;
+  }
+
   const connectionManager = Container.get('connectionManager') as ConnectionManager;
   if (!connectionManager) {
     return undefined;
   }
 
-  return connectionManager.getByLabel(String(label));
+  return connectionManager.getByLabel(uniqueLabels[0]);
+}
+
+function resolveCommandItems(item: any): any[] {
+  if (Array.isArray(item)) {
+    LoggerService.getChannel().appendLine(`resolveCommandItems: item is already array, count=${item.length}`);
+    return item;
+  }
+
+  const treeView = Container.get('treeView') as vscode.TreeView<vscode.TreeItem> | undefined;
+  const selection = treeView?.selection;
+
+  const clickedPath = item?.sshPath || item?.ftpPath || item?.label;
+  const clickedConnection = item?.connectionLabel;
+  LoggerService.getChannel().appendLine(`resolveCommandItems: clicked item path=${clickedPath} connection=${clickedConnection}`);
+  LoggerService.getChannel().appendLine(`resolveCommandItems: selection count=${selection?.length ?? 0}`);
+
+  if (selection && selection.length > 1) {
+    const clickedConnection = item?.connectionLabel || item?.label;
+    const sameConnectionItems = selection.filter((selected) => {
+      return ((selected as any).connectionLabel || (selected as any).label) === clickedConnection;
+    });
+
+    LoggerService.getChannel().appendLine(`resolveCommandItems: sameConnectionItems count=${sameConnectionItems.length}`);
+    sameConnectionItems.forEach((selected) => {
+      LoggerService.getChannel().appendLine(`resolveCommandItems: selected item path=${(selected as any).sshPath || (selected as any).ftpPath || (selected as any).label}`);
+    });
+
+    if (sameConnectionItems.length > 1) {
+      return sameConnectionItems;
+    }
+  }
+
+  LoggerService.getChannel().appendLine('resolveCommandItems: using single clicked item');
+  return [item];
 }
 
 export function registerFileFolderCommands() {
@@ -105,8 +150,11 @@ export function registerFileFolderCommands() {
     await service.uploadWithDialogs?.(item);
   }));
 
-  context.subscriptions.push(vscode.commands.registerCommand('tentacle.editFile', async (item: ConnectionItem) => {
-    const connection = resolveConnectionItem(item);
+  context.subscriptions.push(vscode.commands.registerCommand('tentacle.editFile', async (item: any) => {
+    LoggerService.log(`tentacle.editFile command invoked. item path=${item?.sshPath || item?.ftpPath || item?.label} connection=${item?.connectionLabel}`, 'files.ts', 'info');
+    const items = resolveCommandItems(item);
+    LoggerService.log(`tentacle.editFile resolved items count=${items.length}`, 'files.ts', 'info');
+    const connection = resolveConnectionItem(items);
     if (!connection) {
       vscode.window.showErrorMessage(LangService.t('connectionNotFound'));
       return;
@@ -115,7 +163,7 @@ export function registerFileFolderCommands() {
     if (!service) {
       return;
     }
-    await service.editFileWithDialogs?.(item);
+    await service.editFilesWithDialogs?.(items);
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('tentacle.rename', async (item: ConnectionItem) => {

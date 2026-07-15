@@ -22,7 +22,7 @@ export type RemoteClipboard = {
 };
 
 export type RemoteFileEditOptions = {
-  remotePath: string;
+  remoteFiles: string[];
   host?: string;
   user?: string;
   tmpFolderPrefix: string;

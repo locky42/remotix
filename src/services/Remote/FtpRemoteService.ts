@@ -1326,12 +1326,17 @@ export class FtpRemoteService implements RemoteService {
   }
 
 
-  async editFileWithDialogs(item: any): Promise<void> {
+async editFilesWithDialogs(items: any[]): Promise<void> {
     return this._mutex.acquire(async () => {
       const treeDataProvider = Container.get('treeDataProvider') as TreeDataProvider;
-      const ftpPath = item.ftpPath;
+      
+      const itemsArray = Array.isArray(items) ? items : [items];
+      
+      const filePaths = itemsArray
+        .map(item => item.ftpPath || item.sshPath)
+        .filter((path): path is string => !!path);
 
-      if (!ftpPath) {
+      if (filePaths.length === 0) {
         vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
         return;
       }
@@ -1343,59 +1348,73 @@ export class FtpRemoteService implements RemoteService {
       }
 
       await vscode.window.withProgress({
-          location: vscode.ProgressLocation.Notification,
-          title: LangService.t('downloading'),
-          cancellable: true
+        location: vscode.ProgressLocation.Notification,
+        title: LangService.t('downloading'),
+        cancellable: true
       }, async (progress, token) => {
-          try {
-              if (treeDataProvider?.treeLocker) {
-                  treeDataProvider.treeLocker.lock(LangService.t('downloading'), this.connection.label);
-              }
-
-              token.onCancellationRequested(() => {
-                  LoggerService.log('Download cancelled by user');
-              });
-
-              await this.getRemoteFileEditService().openWithTempFile({
-                  remotePath: ftpPath,
-                  host: this.connection.host,
-                  user: this.connection.user,
-                  tmpFolderPrefix: 'tentacle_ftp',
-                  downloadToTemp: async (tmpFile) => {
-                      if (token.isCancellationRequested) throw new Error('Cancelled');
-                      
-                      const activeSession = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
-                      if (!activeSession || (activeSession as any).closed) {
-                          throw new Error('FTP session not initialized or connection closed');
-                      }
-                      LoggerService.log(`Downloading for edit: ${ftpPath} -> ${tmpFile}`);
-                      await activeSession.downloadTo(tmpFile, ftpPath);
-                  },
-                  uploadFromTemp: async (tmpFile) => {
-                      const session2 = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
-                      if (!session2 || (session2 as any).closed) {
-                          throw new Error('Connection lost');
-                      }
-
-                      LoggerService.log(`Uploading changes: ${tmpFile} -> ${ftpPath}`);
-                      await session2.uploadFrom(tmpFile, ftpPath);
-                  },
-                  logCleanupError: (cleanupError) => {
-                      LoggerService.log(`Temp file cleanup error: ${String(cleanupError)}`);
-                  },
-              });
-
-          } catch (e: any) {
-              if (e.message !== 'Cancelled') {
-                  const msg = e.message || String(e);
-                  LoggerService.log(`editFile: ${msg}`, 'FtpRemoteService', 'error');
-                  vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: msg }));
-              }
-          } finally {
-              if (treeDataProvider?.treeLocker) {
-                  treeDataProvider.treeLocker.unlock();
-              }
+        try {
+          if (treeDataProvider?.treeLocker) {
+            treeDataProvider.treeLocker.lock(LangService.t('downloading'), this.connection.label);
           }
+
+          token.onCancellationRequested(() => {
+            LoggerService.log('Download cancelled by user');
+          });
+
+          const remotePathByTempFile = new Map<string, string>();
+
+      await this.getRemoteFileEditService().openWithTempFiles({
+            remoteFiles: filePaths,
+            host: this.connection.host,
+            user: this.connection.user,
+            tmpFolderPrefix: 'tentacle_ftp',
+            
+            downloadToTemp: async (tmpFile) => {
+              if (token.isCancellationRequested) throw new Error('Cancelled');
+              
+              const remotePath = filePaths[remotePathByTempFile.size];
+              if (!remotePath) {
+                throw new Error('FTP session not initialized or connection closed');
+              }
+              remotePathByTempFile.set(tmpFile, remotePath);
+
+              const activeSession = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
+              if (!activeSession || (activeSession as any).closed) {
+                throw new Error('FTP session not initialized or connection closed');
+              }
+              
+              LoggerService.log(`Downloading for edit: ${remotePath} -> ${tmpFile}`);
+              await activeSession.downloadTo(tmpFile, remotePath);
+            },
+            
+            uploadFromTemp: async (tmpFile) => {
+              const remotePath = remotePathByTempFile.get(tmpFile);
+              const session2 = await SessionProvider.getSession<FtpClient>(this.connection.label, this);
+              
+              if (!session2 || (session2 as any).closed || !remotePath) {
+                throw new Error('Connection lost');
+              }
+
+              LoggerService.log(`Uploading changes: ${tmpFile} -> ${remotePath}`);
+              await session2.uploadFrom(tmpFile, remotePath);
+            },
+            
+            logCleanupError: (cleanupError) => {
+              LoggerService.log(`Temp file cleanup error: ${String(cleanupError)}`);
+            },
+          });
+
+        } catch (e: any) {
+          if (e.message !== 'Cancelled') {
+            const msg = e.message || String(e);
+            LoggerService.log(`editFiles: ${msg}`, 'FtpRemoteService', 'error');
+            vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: msg }));
+          }
+        } finally {
+          if (treeDataProvider?.treeLocker) {
+            treeDataProvider.treeLocker.unlock();
+          }
+        }
       });
     });
   }

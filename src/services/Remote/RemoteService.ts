@@ -33,7 +33,7 @@ export interface RemoteService {
 
   copyItem?(sourceRemotePath: string, targetRemotePath: string, isDirectory: boolean): Promise<void>;
   
-  editFileWithDialogs?(item: any): Promise<void>;
+  editFilesWithDialogs?(item: any): Promise<void>;
   
   moveItems?(items: {sshPath: string}[], targetFolder: string, treeDataProvider: any): Promise<void>;
 }

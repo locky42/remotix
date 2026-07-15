@@ -1422,12 +1422,21 @@ export class SshRemoteService implements RemoteService {
   }
 
 
-  async editFileWithDialogs(item: any): Promise<void> {
-    const filePath = item.ftpPath || item.sshPath;
-    if (!filePath) {
+async editFilesWithDialogs(items: any[]): Promise<void> {
+    const itemsArray = Array.isArray(items) ? items : [items];
+    LoggerService.log(`SshRemoteService.editFilesWithDialogs: items count=${itemsArray.length}`, 'SshRemoteService', 'info');
+    
+    const filePaths = itemsArray
+      .map(item => item.ftpPath || item.sshPath)
+      .filter((path): path is string => !!path);
+
+    LoggerService.log(`SshRemoteService.editFilesWithDialogs: filePaths=${JSON.stringify(filePaths)}`, 'SshRemoteService', 'info');
+
+    if (filePaths.length === 0) {
       vscode.window.showErrorMessage(LangService.t('missingPathOrConnection'));
       return;
     }
+
     const session = await SessionProvider.getSession<SshClient>(this.connection.label, this);
     if (!session) {
       vscode.window.showErrorMessage(LangService.t('noConnectionsFound'));
@@ -1435,37 +1444,34 @@ export class SshRemoteService implements RemoteService {
     }
 
     try {
+      const remotePathByTempFile = new Map<string, string>();
+
       await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: LangService.t('downloading'),
         cancellable: true
       }, async (progress, token) => {
-        token.onCancellationRequested(() => {
-          LoggerService.log('SSH download cancelled by user');
-          throw new Error('Cancelled');
-        });
-
-        await this.getRemoteFileEditService().openWithTempFile({
-          remotePath: filePath,
+        
+        await this.getRemoteFileEditService().openWithTempFiles({
+          remoteFiles: filePaths,
           host: this.connection.host,
           user: this.connection.user,
           tmpFolderPrefix: 'tentacle',
+          
           downloadToTemp: async (tmpFile) => {
+            const remotePath = filePaths[remotePathByTempFile.size];
+            if (!remotePath) {
+              throw new Error(LangService.t('noConnectionsFound'));
+            }
+            remotePathByTempFile.set(tmpFile, remotePath);
+
             const ssh = await SessionProvider.getSession<SshClient>(this.connection.label, this);
             if (!ssh) throw new Error(LangService.t('noConnectionsFound'));
 
-            await new Promise<void>((resolve, reject) => {
+            return new Promise<void>((resolve, reject) => {
               ssh.sftp((err, sftp) => {
                 if (err) return reject(err);
-
-                LoggerService.log(`SFTP session opened for download: ${filePath}`, 'SshRemoteService', 'info');
-                
-                sftp.fastGet(filePath, tmpFile, {
-                  step: (total_transferred, chunk, total) => {
-                    const percentage = Math.round((total_transferred / total) * 100);
-                    progress.report({ message: percentage + '%' });
-                  }
-                }, (downloadErr) => {
+                sftp.fastGet(remotePath, tmpFile, {}, (downloadErr) => {
                   sftp.end();
                   if (downloadErr) return reject(downloadErr);
                   resolve();
@@ -1473,35 +1479,35 @@ export class SshRemoteService implements RemoteService {
               });
             });
           },
+
           uploadFromTemp: async (tmpFile) => {
+            const remotePath = remotePathByTempFile.get(tmpFile);
             const currentSession = await SessionProvider.getSession<SshClient>(this.connection.label, this);
-            if (!currentSession) throw new Error(LangService.t('noConnectionsFound'));
+            if (!currentSession || !remotePath) throw new Error(LangService.t('noConnectionsFound'));
 
-            await new Promise<void>((resolve, reject) => {
+            return new Promise<void>((resolve, reject) => {
               currentSession.sftp((err, sftp) => {
-                  if (err) return reject(err);
-
-                  LoggerService.log(`SFTP session opened for upload: ${filePath}`, 'SshRemoteService', 'info');
-                  sftp.fastPut(tmpFile, filePath, {}, (uploadErr) => {
-                    sftp.end();
-                    if (uploadErr) return reject(uploadErr);
-                    resolve();
-                  });
+                if (err) return reject(err);
+                sftp.fastPut(tmpFile, remotePath, {}, (uploadErr) => {
+                  sftp.end();
+                  if (uploadErr) return reject(uploadErr);
+                  resolve();
+                });
               });
             });
           },
+          
           logCleanupError: (cleanupError) => {
-              LoggerService.log(`Cleanup error: ${String(cleanupError)}`, 'SshRemoteService', 'error');
+            LoggerService.log(`Cleanup error: ${String(cleanupError)}`, 'SshRemoteService', 'error');
           },
         });
       });
     } catch (e: any) {
       if (e.message !== 'Cancelled') {
-        LoggerService.log(`Error: ${e.message}`, 'SshRemoteService', 'error');
         vscode.window.showErrorMessage(LangService.t('fileDownloadError', { error: e.message }));
       }
     }
-  }
+}
 
 
   async moveItems(items: {sshPath: string}[], targetFolder: string, onDone: () => void): Promise<void> {
